@@ -1,0 +1,2 @@
+document_number,model,cbu,ordered_qty,delivered_qty,remaining_open_qty,posting_date,due_date,branch_name,document_status,po_no,special_instructions,pur_slr_uom_if_base_unit,frm_whse_code,to_whse,user_code,po_number,isms_po_number,total_cbm
+DOC-001,Model-A,10.5,100,80,20,2023-01-15,2023-01-30,Branch-1,Open,PO-12345,Handle with care,PCS,WH-001,BR-001,user1,PO-12345,ISMS-12345,1050.0

@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Scheduled Tripping Reports{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>Scheduled Tripping Reports</h1>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h5>Generate Scheduled Tripping Report</h5>
+  </div>
+  <div class="card-body">
+    <form id="reportForm">
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <label for="reportType" class="form-label">Report Type</label>
+          <select class="form-select" id="reportType" required>
+            <option value="scheduled_trips" selected>Scheduled Trips Report</option>
+            <option value="cancelled_trips">Cancelled Trips Report</option>
+            <option value="vehicle_utilization">Vehicle Utilization Report</option>
+            <option value="driver_performance">Driver Performance Report</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label for="startDate" class="form-label">Start Date</label>
+          <input type="date" class="form-control" id="startDate" required>
+        </div>
+        <div class="col-md-3">
+          <label for="endDate" class="form-label">End Date</label>
+          <input type="date" class="form-control" id="endDate" required>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-12">
+          <button type="submit" class="btn btn-primary">Generate Report</button>
+          <button type="button" class="btn btn-success ms-2" id="exportBtn" style="display:none;">Export to Excel</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card mt-4" id="reportResults" style="display:none;">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5 id="reportTitle">Report Results</h5>
+    <span id="reportDateRange"></span>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-striped" id="reportTable">
+        <thead id="reportTableHead">
+          <!-- Table headers will be dynamically inserted here -->
+        </thead>
+        <tbody id="reportTableBody">
+          <!-- Table data will be dynamically inserted here -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const reportForm = document.getElementById('reportForm');
+  const reportResults = document.getElementById('reportResults');
+  const reportTableHead = document.getElementById('reportTableHead');
+  const reportTableBody = document.getElementById('reportTableBody');
+  const exportBtn = document.getElementById('exportBtn');
+  const reportDateRange = document.getElementById('reportDateRange');
+  const reportTitle = document.getElementById('reportTitle');
+
+  // Set default date range to last 30 days
+  const today = new Date();
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(today.getDate() - 30);
+
+  document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+  document.getElementById('endDate').value = today.toISOString().split('T')[0];
+
+  reportForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const reportType = document.getElementById('reportType').value;
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+
+    // Show date range in the report header
+    const start = new Date(startDate).toLocaleDateString();
+    const end = new Date(endDate).toLocaleDateString();
+    reportDateRange.textContent = `${start} - ${end}`;
+
+    // Update report title based on type
+    const reportTypeText = document.getElementById('reportType').options[document.getElementById('reportType').selectedIndex].text;
+    reportTitle.textContent = reportTypeText;
+
+    // Fetch report data based on type
+    fetch(`/generate_report?report_type=${reportType}&start_date=${startDate}&end_date=${endDate}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          displayReport(data);
+          exportBtn.style.display = 'inline-block';
+        } else {
+          alert('Error generating report: ' + data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while generating the report');
+      });
+  });
+
+  exportBtn.addEventListener('click', function() {
+    const reportType = document.getElementById('reportType').value;
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+
+    window.location.href = `/export_report?report_type=${reportType}&start_date=${startDate}&end_date=${endDate}`;
+  });
+
+  function displayReport(data) {
+    reportTableHead.innerHTML = '';
+    reportTableBody.innerHTML = '';
+
+    // Create table headers
+    const headerRow = document.createElement('tr');
+    data.headers.forEach(header => {
+      const th = document.createElement('th');
+      th.textContent = header;
+      headerRow.appendChild(th);
+    });
+    reportTableHead.appendChild(headerRow);
+
+    // Create table rows
+    data.rows.forEach(row => {
+      const tr = document.createElement('tr');
+      row.forEach(cell => {
+        const td = document.createElement('td');
+        td.textContent = cell;
+        tr.appendChild(td);
+      });
+      reportTableBody.appendChild(tr);
+    });
+
+    reportResults.style.display = 'block';
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}Delivery Schedules{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>Delivery Schedules</h1>
+  <a href="{{ url_for('add_schedule') }}" class="btn btn-primary">+ New Schedule</a>
+</div>
+
+{% for schedule in schedules %}
+<div class="card mb-4">
+  <div class="card-header">
+    <h5>{{ schedule.delivery_schedule.strftime('%B %d, %Y') }} 
+      <span class="badge bg-info">Schedule #{{ schedule.id }}</span>
+    </h5>
+  </div>
+  <div class="card-body">
+    {% if schedule.trips %}
+      {% for trip in schedule.trips %}
+      <div class="border rounded p-3 mb-3">
+        <h6>
+          Trip #{{ trip.trip_number }} 
+          <span class="badge bg-secondary">CBM: {{ "%.2f"|format(trip.total_cbm) }}</span>
+        </h6>
+        <p>
+          <strong>Vehicle:</strong> {{ trip.vehicle.plate_number }}<br>
+          <strong>Drivers:</strong> 
+          {% for driver in trip.drivers %}
+            {{ driver.name }}{% if not loop.last %}, {% endif %}
+          {% endfor %}<br>
+          {% if trip.assistants %}
+          <strong>Assistants:</strong> 
+          {% for assistant in trip.assistants %}
+            {{ assistant.name }}{% if not loop.last %}, {% endif %}
+          {% endfor %}<br>
+          {% endif %}
+        </p>
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead><tr>
+              <th>Doc #</th>
+              <!-- <th>Item</th> -->
+              <th>Order Qty</th>
+              <th>Branch</th>
+              <th>CBM</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr></thead>
+            <tbody>
+              {% for detail in trip.details %}
+              <tr>
+                <td>{{ detail.document_number }}</td>
+                <!-- <td>—</td> -->
+                <td>{{ detail.total_ordered_qty }}</td>
+                <td>{{ detail.area or '—' }}</td>
+                <td>{{ "%.2f"|format(detail.total_cbm) }}</td>
+                <td><span class="badge bg-secondary">{{ detail.status }}</span></td>
+                <td>
+                  {% if detail.status == "Delivered" %}
+                  <button class="btn btn-sm btn-danger" onclick="cancelTripDetail('{{ detail.document_number }}', {{ schedule.id }}, {{ trip.trip_number }})">Cancel</button>
+                  {% elif detail.status == "Not Scheduled" %}
+                  <span class="badge bg-secondary">Cancelled</span>
+                  {% else %}
+                  <span class="badge bg-secondary">{{ detail.status }}</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">No trips scheduled.</p>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+{% if not schedules %}
+<div class="alert alert-info">No schedules created yet.</div>
+{% endif %}
+
+<!-- Cancel Trip Detail Modal -->
+<div class="modal fade" id="cancelModal" tabindex="-1" aria-labelledby="cancelModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="cancelModalLabel">Cancel Trip Detail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="cancelForm">
+          <div class="mb-3">
+            <label for="cancelReason" class="form-label">Cancel Reason</label>
+            <select class="form-select" id="cancelReason" required>
+              <option value="" selected disabled>Select a reason</option>
+              <option value="BARCODE CONCERN">BARCODE CONCERN</option>
+              <option value="CUT-OFF CONCERN">CUT-OFF CONCERN</option>
+              <option value="DISPATCHING CONCERN">DISPATCHING CONCERN</option>
+              <option value="DOCUMENT CONCERN">DOCUMENT CONCERN</option>
+              <option value="MANPOWER CONCERN">MANPOWER CONCERN</option>
+              <option value="ORDERING CONCERN">ORDERING CONCERN</option>
+              <option value="P.O. CONCERN">P.O. CONCERN</option>
+              <option value="PREPARATION CONCERN">PREPARATION CONCERN</option>
+              <option value="RELEASING/RECEIVING CONCERN">RELEASING/RECEIVING CONCERN</option>
+              <option value="UNIT CONCERN">UNIT CONCERN</option>
+              <option value="VEHICLE CONCERN">VEHICLE CONCERN</option>
+              <option value="WEATHER CONDITION">WEATHER CONDITION</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="cancelDepartment" class="form-label">Cancel Department</label>
+            <select class="form-select" id="cancelDepartment" required>
+              <option value="" selected disabled>Select a department</option>
+              <option value="SALES">SALES</option>
+              <option value="MKTG">MKTG</option>
+              <option value="LOG">LOG</option>
+              <option value="SNM">SNM</option>
+              <option value="CSR">CSR</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-danger" id="confirmCancel">Confirm Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- <script>
+function cancelTripDetail(documentNumber, scheduleId, tripNumber) {
+  if (confirm('Are you sure you want to cancel this trip detail?')) {
+    fetch('/cancel_trip_detail', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        document_number: documentNumber,
+        schedule_id: scheduleId,
+        trip_number: tripNumber
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        location.reload();
+      } else {
+        alert('Error cancelling trip detail: ' + data.message);
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('An error occurred while cancelling the trip detail');
+    });
+  }
+}
+</script> -->
+
+<script>
+// Global variables to store trip detail information
+let currentDocumentNumber, currentScheduleId, currentTripNumber;
+
+function cancelTripDetail(documentNumber, scheduleId, tripNumber) {
+  // Store the trip detail information in global variables
+  currentDocumentNumber = documentNumber;
+  currentScheduleId = scheduleId;
+  currentTripNumber = tripNumber;
+
+  // Show the modal
+  const cancelModal = new bootstrap.Modal(document.getElementById('cancelModal'));
+  cancelModal.show();
+}
+
+// Handle the confirm cancel button click
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('confirmCancel').addEventListener('click', function() {
+    const cancelReason = document.getElementById('cancelReason').value;
+    const cancelDepartment = document.getElementById('cancelDepartment').value;
+
+    // Validate that both fields are selected
+    if (!cancelReason || !cancelDepartment) {
+      alert('Please select both cancel reason and department');
+      return;
+    }
+
+    // Close the modal
+    const cancelModal = bootstrap.Modal.getInstance(document.getElementById('cancelModal'));
+    cancelModal.hide();
+
+    // Send the cancel request
+    fetch('/cancel_trip_detail', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        document_number: currentDocumentNumber,
+        schedule_id: currentScheduleId,
+        trip_number: currentTripNumber,
+        cancel_reason: cancelReason,
+        cancel_department: cancelDepartment
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        location.reload();
+      } else {
+        alert('Error cancelling trip detail: ' + data.message);
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('An error occurred while cancelling the trip detail');
+    });
+  });
+
+  // Reset form when modal is hidden
+  document.getElementById('cancelModal').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('cancelReason').value = '';
+    document.getElementById('cancelDepartment').value = '';
+  });
+});
+</script>
+{% endblock %}

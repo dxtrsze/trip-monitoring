@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Upload CSV - Trip Monitoring System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Upload Delivery Data</h1>
+    <a href="{{ url_for('download_csv_template') }}" class="btn btn-outline-primary">
+        <i class="bi bi-download"></i> Download Template
+    </a>
+</div>
+
+<div class="card mt-4">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="file" class="form-label">Select CSV File</label>
+                <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
+                <div class="form-text">
+                    Upload a CSV file containing delivery records. Use the template to ensure correct format.
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Upload</button>
+            <a href="{{ url_for('view_data') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5>CSV Format Requirements</h5>
+    </div>
+    <div class="card-body">
+        <p>Your CSV file must include the following <strong>exact column headers</strong> (case-sensitive):</p>
+        <ul>
+            <li><code>Type</code> – e.g., "ITR"</li>
+            <li><code>Posting Date</code> – in <code>YYYY-MM-DD</code> format</li>
+            <li><code>Document Number</code></li>
+            <li><code>Item No.</code></li>
+            <li><code>Ordered Quantity</code></li>
+            <li><code>Delivered Quantity</code></li>
+            <li><code>Remaining Open Qty</code></li>
+            <li><code>From Warehouse Code</code></li>
+            <li><code>To Warehouse</code></li>
+            <li><code>Remarks</code> (optional)</li>
+            <li><code>Special Instruction</code> (optional)</li>
+            <li><code>Branch Name</code></li>
+            <li><code>Branch Name v2</code> (optional)</li>
+            <li><code>Document Status</code> – e.g., "C" or "O"</li>
+            <li><code>Due Date</code> – in <code>YYYY-MM-DD</code> format</li>
+            <li><code>User_Code</code></li>
+            <li><code>PO Number</code> (optional)</li>
+            <li><code>ISMS SO#</code></li>
+            <li><code>CBM</code></li>
+            <li><code>Customer/Vendor Code</code> (optional)</li>
+            <li><code>Customer/Vendor Name</code> (optional)</li>
+        </ul>
+        <p class="text-muted">
+            ⚠️ <strong>Important:</strong> Use the <a href="{{ url_for('download_csv_template') }}">downloadable template</a> to avoid formatting errors.
+        </p>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block title %}Create Delivery Schedule{% endblock %}
+
+{% block content %}
+<h1>Create New Delivery Schedule</h1>
+
+<form method="post" id="scheduleForm">
+  <!-- Step 1: Select Date -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="mb-3">
+        <label class="form-label">Delivery Date *</label>
+        <input type="date" class="form-control" name="delivery_schedule" id="deliveryDate" required>
+        <div class="form-text">Select a due date to load shipments</div>
+      </div>
+      <button type="button" class="btn btn-primary" id="loadBtn">Load Available Shipments</button>
+      <a href="{{ url_for('view_schedule') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </div>
+
+  <!-- Step 2: Shipments List (loaded via AJAX) -->
+  <div id="shipmentsSection" style="display:none;">
+
+
+    <!-- Step 3: Trips -->
+    <div id="tripsContainer"></div>
+    <button type="button" class="btn btn-outline-success" id="addTripBtn">+ Add Trip</button>
+    <div class="mt-3">
+      <button type="submit" class="btn btn-success">Save Schedule</button>
+    </div>
+    <div class="card mb-4">
+      <div class="card-header">Available Shipments (<span id="shipmentCount">0</span>)</div>
+      <div class="card-body">
+        <div id="shipmentsList"></div>
+      </div>
+    </div>
+  </div>
+
+  <input type="hidden" name="trip_count" id="tripCount" value="0">
+</form>
+
+<script>
+let tripCounter = 0;
+let shipments = [];
+
+document.getElementById('loadBtn').addEventListener('click', function() {
+  const date = document.getElementById('deliveryDate').value;
+  if (!date) {
+    alert('Please select a delivery date');
+    return;
+  }
+
+  // Reset the trips container when loading new shipments for a different date
+  document.getElementById('tripsContainer').innerHTML = '';
+  tripCounter = 0;
+  document.getElementById('tripCount').value = '0';
+
+  fetch(`/api/not_scheduled?due_date=${date}`)
+    .then(res => res.json())
+    .then(data => {
+      shipments = data;
+      renderShipments();
+      document.getElementById('shipmentsSection').style.display = 'block';
+    });
+});
+
+function renderShipments() {
+  const container = document.getElementById('shipmentsList');
+  const countEl = document.getElementById('shipmentCount');
+  countEl.textContent = shipments.length;
+
+  if (shipments.length === 0) {
+    container.innerHTML = '<p class="text-muted">No unscheduled shipments found.</p>';
+    return;
+  }
+
+  let html = `<div class="table-responsive"><table class="table table-sm">
+    <thead><tr>
+      <th>Select</th>
+      <th>Doc #</th>
+      <th>Branch</th>
+      <th>Due Date</th>
+      <th>Total CBM</th>
+    </tr></thead><tbody>`;
+  
+  shipments.forEach(item => {
+    // Check if this shipment is already assigned to any trip (only check within trips container)
+    const isAssigned = document.querySelector(`#tripsContainer [data-ids*="${item.data_ids[0]}"]`) ? true : false;
+    
+    html += `
+      <tr ${isAssigned ? 'class="table-secondary"' : ''}>
+        <td><input type="checkbox" class="shipment-checkbox" data-ids="${item.data_ids.join(',')}" data-cbm="${item.total_cbm}" ${isAssigned ? 'disabled' : ''}></td>
+        <td>${item.document_number} ${isAssigned ? '<span class="badge bg-secondary ms-1">Assigned</span>' : ''}</td>
+        <td>${item.branch}</td>
+        <td>${item.due_date}</td>
+        <td>${item.total_cbm.toFixed(2)}</td>
+      </tr>`;
+  });
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+document.getElementById('addTripBtn').addEventListener('click', addTrip);
+
+function addTrip() {
+  tripCounter++;
+  const tripId = tripCounter;
+
+  const tripHtml = `
+    <div class="card mb-3 trip-card" data-trip="${tripId}">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Trip #${tripId}</span>
+        <button type="button" class="btn btn-sm btn-danger" onclick="removeTrip(${tripId})">Remove</button>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-4 mb-3">
+            <label>Vehicle *</label>
+            <select name="vehicle_${tripId}" class="form-select" required>
+              <option value="">Select</option>
+              {% for v in vehicles %}
+              <option value="{{ v.id }}">{{ v.plate_number }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4 mb-3">
+            <label>Driver *</label>
+            <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+              {% for d in drivers %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="driver_${tripId}" value="{{ d.id }}" id="driver_${tripId}_{{ d.id }}">
+                <label class="form-check-label" for="driver_${tripId}_{{ d.id }}">
+                  {{ d.name }}
+                </label>
+              </div>
+              {% endfor %}
+            </div>
+            <div class="form-text">Select one or more drivers</div>
+          </div>
+          <div class="col-md-4 mb-3">
+            <label>Assistant</label>
+            <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+              {% for a in assistants %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="assistant_${tripId}" value="{{ a.id }}" id="assistant_${tripId}_{{ a.id }}">
+                <label class="form-check-label" for="assistant_${tripId}_{{ a.id }}">
+                  {{ a.name }}
+                </label>
+              </div>
+              {% endfor %}
+            </div>
+            <div class="form-text">Select one or more assistants</div>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label>Assign Shipments</label>
+          <div id="trip-${tripId}-shipments" class="border p-2" style="max-height:150px;overflow-y:auto;">
+            <p class="text-muted mb-0">Select shipments above, then click "Assign to Trip ${tripId}"</p>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-primary mt-2" 
+                  onclick="assignToTrip(${tripId})">Assign Selected to Trip ${tripId}</button>
+        </div>
+        <div><strong>Total CBM:</strong> <span id="trip-${tripId}-cbm">0.00</span></div>
+        <input type="hidden" name="trip_${tripId}_data_ids" id="trip-${tripId}-ids">
+      </div>
+    </div>`;
+
+  document.getElementById('tripsContainer').insertAdjacentHTML('beforeend', tripHtml);
+  document.getElementById('tripCount').value = tripCounter;
+}
+
+function assignToTrip(tripId) {
+  const checkboxes = document.querySelectorAll('.shipment-checkbox:checked');
+  const tripContainer = document.getElementById(`trip-${tripId}-shipments`);
+  const idsInput = document.getElementById(`trip-${tripId}-ids`);
+  let totalCbm = 0;
+
+  // Get current CBM and IDs from the trip
+  const currentCbm = parseFloat(document.getElementById(`trip-${tripId}-cbm`).textContent) || 0;
+  const currentIds = idsInput.value ? idsInput.value.split(',') : [];
+
+  // Start with existing values
+  let assigned = [...currentIds];
+  totalCbm = currentCbm;
+  checkboxes.forEach(cb => {
+    const ids = cb.dataset.ids;
+    const cbm = parseFloat(cb.dataset.cbm);
+    const documentNumber = cb.parentElement.nextElementSibling.textContent;
+    if (ids) {
+      // Check if this shipment is already assigned to avoid duplicates
+      const newIds = ids.split(',');
+      const hasExistingId = newIds.some(id => assigned.includes(id));
+
+      if (!hasExistingId) {
+        assigned.push(...newIds);
+        totalCbm += cbm;
+        const shipmentId = `shipment-${ids.split(',')[0]}`;
+        tripContainer.innerHTML += `
+          <div class="d-flex justify-content-between small" id="${shipmentId}">
+            <span>${documentNumber} (Grouped)</span>
+            <div>
+              <span>${cbm.toFixed(2)}</span>
+              <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="removeFromTrip(${tripId}, '${ids}', ${cbm}, '${documentNumber}')">Remove</button>
+            </div>
+          </div>`;
+
+        // Update the row in the main table to show it's assigned
+        const row = cb.closest('tr');
+        if (row) {
+          row.classList.add('table-secondary');
+          cb.disabled = true;
+
+          // Add or update the "Assigned" badge
+          const docCell = row.cells[1];
+          let badge = docCell.querySelector('.badge');
+          if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'badge bg-primary ms-1';
+            badge.textContent = 'Assigned';
+            docCell.appendChild(badge);
+          }
+        }
+      }
+    }
+    cb.checked = false; // uncheck after assign
+  });
+
+  document.getElementById(`trip-${tripId}-cbm`).textContent = totalCbm.toFixed(2);
+  idsInput.value = assigned.join(',');
+}
+
+function removeTrip(tripId) {
+  document.querySelector(`.trip-card[data-trip="${tripId}"]`).remove();
+}
+
+function removeFromTrip(tripId, ids, cbm, documentNumber) {
+  // Remove from the trip's shipment list
+  const shipmentId = `shipment-${ids.split(',')[0]}`;
+  const element = document.getElementById(shipmentId);
+  if (element) {
+    element.remove();
+  }
+  
+  // Update the hidden input
+  const idsInput = document.getElementById(`trip-${tripId}-ids`);
+  const currentIds = idsInput.value.split(',');
+  const removingIds = ids.split(',');
+  const newIds = currentIds.filter(id => !removingIds.includes(id));
+  idsInput.value = newIds.join(',');
+  
+  // Update the CBM total
+  const currentCbm = parseFloat(document.getElementById(`trip-${tripId}-cbm`).textContent);
+  const newCbm = currentCbm - cbm;
+  document.getElementById(`trip-${tripId}-cbm`).textContent = newCbm.toFixed(2);
+  
+  // Re-enable the checkbox in the main list
+  const checkbox = document.querySelector(`.shipment-checkbox[data-ids*="${ids.split(',')[0]}"]`);
+  if (checkbox) {
+    checkbox.disabled = false;
+    const row = checkbox.closest('tr');
+    if (row) {
+      row.classList.remove('table-secondary');
+      const docCell = row.cells[1];
+      const badge = docCell.querySelector('.badge');
+      if (badge) badge.remove();
+    }
+  }
+}
+</script>
+{% endblock %}
