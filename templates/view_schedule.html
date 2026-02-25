@@ -4,7 +4,9 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h1>Delivery Schedules</h1>
+  {% if current_user.position == 'admin' %}
   <a href="{{ url_for('add_schedule') }}" class="btn btn-primary">+ New Schedule</a>
+  {% endif %}
 </div>
 
 {% for schedule in schedules %}
