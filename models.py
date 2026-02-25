@@ -1,4 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import UserMixin
 
 db = SQLAlchemy()
 
@@ -101,5 +103,47 @@ class TripDetail(db.Model):
     cancel_reason = db.Column(db.String(255))  # Reason for cancellation if status is "Cancelled"
     cause_department = db.Column(db.String(255))  # Department responsible for the cause
 
+    # Arrival and departure tracking
+    arrive = db.Column(db.DateTime)  # Arrival date and time
+    departure = db.Column(db.DateTime)  # Departure date and time
+    reason = db.Column(db.Text)  # Reason for arrival/departure notes
+
     def __repr__(self):
-        return f'<TripDetail {self.id} - Document {self.document_number} - Trip {self.trip_id}>' 
+        return f'<TripDetail {self.id} - Document {self.document_number} - Trip {self.trip_id}>'
+
+class Cluster(db.Model):
+    __tablename__ = 'cluster'
+    id = db.Column(db.Integer, primary_key=True)
+    no = db.Column(db.String(50), nullable=False)  # Cluster number/name
+    weekly_schedule = db.Column(db.String(100))  # Weekly schedule
+    delivered_by = db.Column(db.String(100))  # Who delivers
+    location = db.Column(db.String(100))  # Location
+    category = db.Column(db.String(100))  # Category
+    area = db.Column(db.String(100))  # Area
+    branch = db.Column(db.String(100))  # Branch
+    frequency = db.Column(db.String(100))  # Frequency
+    frequency_count = db.Column(db.String(50))  # Frequency count
+    tl = db.Column(db.String(100))  # TL (Team Lead?)
+    delivery_mode = db.Column(db.String(100))  # Delivery mode
+    active_branches = db.Column(db.Text)  # Active branches (can be long)
+
+    def __repr__(self):
+        return f'<Cluster {self.no} - {self.branch}>'
+
+class User(UserMixin, db.Model):
+    __tablename__ = 'user'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    position = db.Column(db.String(50), nullable=False, default='user')  # 'admin' or 'user'
+    status = db.Column(db.String(50), nullable=False, default='active')  # 'active' or 'inactive'
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def __repr__(self):
+        return f'<User {self.email} - {self.position}>' 

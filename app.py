@@ -1,12 +1,14 @@
 import os
 import csv
+import io
 from dateutil import parser as date_parser
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-from werkzeug.utils import secure_filename
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import pandas as pd
-from models import db, Vehicle, Manpower, Data, Schedule, Trip, TripDetail
+from models import db, Vehicle, Manpower, Data, Schedule, Trip, TripDetail, Cluster, User
 from sqlalchemy import func
+from functools import wraps
 
 
 
@@ -22,6 +24,16 @@ if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
 db.init_app(app)
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 # Create tables
 with app.app_context():
@@ -43,20 +55,93 @@ def parse_date_flexible(date_str):
     except (ValueError, TypeError):
         raise ValueError(f"Unable to parse date: '{date_str}'")
 
+# Decorator to check if user is admin
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        if current_user.position != 'admin':
+            flash('Access denied. Admin privileges required.', 'error')
+            return redirect(url_for('view_schedule'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Decorator to check if user is logged in
+def login_required_user(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 # Home page
 @app.route('/')
 def index():
-    return render_template('base.html')
+    if current_user.is_authenticated:
+        # Redirect to view_schedule for all authenticated users
+        return redirect(url_for('view_schedule'))
+    else:
+        # Redirect to login for non-authenticated users
+        return redirect(url_for('login'))
+
+# Authentication routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+
+        if not email or not password:
+            flash('Please provide both email and password', 'error')
+            return redirect(url_for('login'))
+
+        user = User.query.filter_by(email=email).first()
+
+        if user and user.check_password(password):
+            if user.status != 'active':
+                flash('Your account is inactive. Please contact the administrator.', 'error')
+                return redirect(url_for('login'))
+
+            login_user(user)
+            flash(f'Welcome back, {user.name}!', 'success')
+
+            # Redirect to the appropriate page based on user position
+            if user.position == 'admin':
+                return redirect(url_for('view_data'))
+            else:
+                return redirect(url_for('view_schedule'))
+        else:
+            flash('Invalid email or password', 'error')
+            return redirect(url_for('login'))
+
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('You have been logged out', 'info')
+    return redirect(url_for('login'))
 
 # Data management routes
 @app.route('/data')
+@login_required
 def view_data():
    # ✅ Only fetch records with status = 'Not Scheduled'
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
     not_scheduled_data = Data.query.filter_by(status='Not Scheduled').all()
     return render_template('view_data.html', data=not_scheduled_data)
 
 @app.route('/data/scheduled')
+@login_required
 def view_scheduled_data():
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
     # This page will use JavaScript to fetch scheduled data via API
     return render_template('view_scheduled_data.html')
  
@@ -145,7 +230,26 @@ def upload_data():
             return redirect(request.url)
 
         try:
-            stream = file.stream.read().decode("utf-8-sig").splitlines()
+            # Read file content
+            file_content = file.stream.read()
+
+            # Try multiple encodings
+            encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+            stream = None
+            decoded = False
+
+            for encoding in encodings:
+                try:
+                    stream = file_content.decode(encoding).splitlines()
+                    decoded = True
+                    break
+                except (UnicodeDecodeError, UnicodeError):
+                    continue
+
+            if not decoded:
+                flash("File encoding error. Unable to read the CSV file. Please ensure it's saved as UTF-8, Latin-1, or Windows-1252 encoding.", 'error')
+                return redirect(request.url)
+
             csv_reader = csv.DictReader(stream)
 
             expected_headers = {
@@ -224,9 +328,6 @@ def upload_data():
             flash(f"Successfully uploaded {records_added} record(s)!", 'success')
             return redirect(url_for('view_data'))
 
-        except UnicodeDecodeError:
-            flash("File encoding error. Please upload a UTF-8 CSV file.", 'error')
-            return redirect(request.url)
         except Exception as e:
             flash(f"Failed to process file: {str(e)}", 'error')
             db.session.rollback()
@@ -295,7 +396,11 @@ def edit_data(id):
 
 # Resource management routes
 @app.route('/vehicles')
+@login_required
 def manage_vehicles():
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
     vehicles = Vehicle.query.all()
     return render_template('manage_vehicles.html', vehicles=vehicles)
 
@@ -333,7 +438,11 @@ def delete_vehicle(id):
     return redirect(url_for('manage_vehicles'))
 
 @app.route('/manpower')
+@login_required
 def manage_manpower():
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
     manpower = Manpower.query.all()
     return render_template('manage_manpower.html', manpower=manpower)
 
@@ -370,6 +479,349 @@ def delete_manpower(id):
         flash(f'Error deleting manpower: {str(e)}')
 
     return redirect(url_for('manage_manpower'))
+
+# Cluster management routes
+@app.route('/clusters')
+@login_required
+def manage_clusters():
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+    clusters = Cluster.query.all()
+    return render_template('manage_clusters.html', clusters=clusters)
+
+@app.route('/clusters/add', methods=['POST'])
+def add_cluster():
+    no = request.form.get('no')
+    weekly_schedule = request.form.get('weekly_schedule')
+    delivered_by = request.form.get('delivered_by')
+    location = request.form.get('location')
+    category = request.form.get('category')
+    area = request.form.get('area')
+    branch = request.form.get('branch')
+    frequency = request.form.get('frequency')
+    frequency_count = request.form.get('frequency_count')
+    tl = request.form.get('tl')
+    delivery_mode = request.form.get('delivery_mode')
+    active_branches = request.form.get('active_branches')
+
+    if not no:
+        flash('Cluster number is required')
+        return redirect(url_for('manage_clusters'))
+
+    try:
+        cluster = Cluster(
+            no=no,
+            weekly_schedule=weekly_schedule,
+            delivered_by=delivered_by,
+            location=location,
+            category=category,
+            area=area,
+            branch=branch,
+            frequency=frequency,
+            frequency_count=frequency_count,
+            tl=tl,
+            delivery_mode=delivery_mode,
+            active_branches=active_branches
+        )
+        db.session.add(cluster)
+        db.session.commit()
+        flash('Cluster added successfully!')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error adding cluster: {str(e)}')
+
+    return redirect(url_for('manage_clusters'))
+
+@app.route('/clusters/<int:id>/edit', methods=['GET', 'POST'])
+def edit_cluster(id):
+    cluster = Cluster.query.get_or_404(id)
+
+    if request.method == 'POST':
+        try:
+            cluster.no = request.form.get('no')
+            cluster.weekly_schedule = request.form.get('weekly_schedule')
+            cluster.delivered_by = request.form.get('delivered_by')
+            cluster.location = request.form.get('location')
+            cluster.category = request.form.get('category')
+            cluster.area = request.form.get('area')
+            cluster.branch = request.form.get('branch')
+            cluster.frequency = request.form.get('frequency')
+            cluster.frequency_count = request.form.get('frequency_count')
+            cluster.tl = request.form.get('tl')
+            cluster.delivery_mode = request.form.get('delivery_mode')
+            cluster.active_branches = request.form.get('active_branches')
+
+            db.session.commit()
+            flash('Cluster updated successfully!')
+            return redirect(url_for('manage_clusters'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating cluster: {str(e)}')
+
+    return render_template('edit_cluster.html', cluster=cluster)
+
+@app.route('/clusters/<int:id>/delete', methods=['POST'])
+def delete_cluster(id):
+    cluster = Cluster.query.get_or_404(id)
+
+    try:
+        db.session.delete(cluster)
+        db.session.commit()
+        flash('Cluster deleted successfully!')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting cluster: {str(e)}')
+
+    return redirect(url_for('manage_clusters'))
+
+@app.route('/clusters/upload', methods=['GET', 'POST'])
+def upload_clusters():
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            flash('No file selected', 'error')
+            return redirect(request.url)
+
+        file = request.files['file']
+        if file.filename == '':
+            flash('No file selected', 'error')
+            return redirect(request.url)
+
+        if not file.filename.lower().endswith('.csv'):
+            flash('Only CSV files are allowed', 'error')
+            return redirect(request.url)
+
+        try:
+            # Read file content
+            file_content = file.stream.read()
+
+            # Try multiple encodings
+            encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+            stream = None
+            decoded = False
+
+            for encoding in encodings:
+                try:
+                    stream = file_content.decode(encoding).splitlines()
+                    decoded = True
+                    break
+                except (UnicodeDecodeError, UnicodeError):
+                    continue
+
+            if not decoded:
+                flash("File encoding error. Unable to read the CSV file. Please ensure it's saved as UTF-8, Latin-1, or Windows-1252 encoding.", 'error')
+                return redirect(request.url)
+
+            csv_reader = csv.DictReader(stream)
+
+            # Expected headers for cluster CSV
+            expected_headers = {
+                "No.", "Weekly Schedule", "Delivered By", "Location", "Category",
+                "Area", "Branch", "Frequency", "Frequency Count", "TL",
+                "Delivery Mode", "Active Branches"
+            }
+
+            # Check if headers match (allowing extra columns but requiring expected ones)
+            csv_headers = set(csv_reader.fieldnames) if csv_reader.fieldnames else set()
+            missing = expected_headers - csv_headers
+
+            if missing:
+                flash(f"Invalid CSV headers. Missing columns: {', '.join(missing)}", 'error')
+                return redirect(request.url)
+
+            # Delete all existing cluster data
+            Cluster.query.delete()
+            db.session.commit()
+
+            # Upload new data
+            records_added = 0
+            for row_num, row in enumerate(csv_reader, start=2):
+                try:
+                    # Helper to convert empty strings to None
+                    def clean(val):
+                        return val if val and val.strip() != '' else None
+
+                    cluster_entry = Cluster(
+                        no=clean(row.get("No.")),
+                        weekly_schedule=clean(row.get("Weekly Schedule")),
+                        delivered_by=clean(row.get("Delivered By")),
+                        location=clean(row.get("Location")),
+                        category=clean(row.get("Category")),
+                        area=clean(row.get("Area")),
+                        branch=clean(row.get("Branch")),
+                        frequency=clean(row.get("Frequency")),
+                        frequency_count=clean(row.get("Frequency Count")),
+                        tl=clean(row.get("TL")),
+                        delivery_mode=clean(row.get("Delivery Mode")),
+                        active_branches=clean(row.get("Active Branches"))
+                    )
+
+                    if cluster_entry.no:  # Only add if 'no' field is present
+                        db.session.add(cluster_entry)
+                        records_added += 1
+
+                except Exception as e:
+                    flash(f"Row {row_num}: Error processing row – {str(e)}", 'error')
+                    db.session.rollback()
+                    return redirect(request.url)
+
+            db.session.commit()
+            flash(f"Successfully uploaded {records_added} cluster(s)! All previous data was replaced.", 'success')
+            return redirect(url_for('manage_clusters'))
+
+        except Exception as e:
+            flash(f"Failed to process file: {str(e)}", 'error')
+            db.session.rollback()
+            return redirect(request.url)
+
+    return render_template('upload_clusters.html')
+
+@app.route('/clusters/download_template')
+def download_clusters_template():
+    from io import StringIO
+    from flask import Response
+
+    # Create an in-memory CSV
+    template = StringIO()
+    writer = csv.writer(template)
+
+    # Write headers
+    writer.writerow([
+        "No.", "Weekly Schedule", "Delivered By", "Location", "Category",
+        "Area", "Branch", "Frequency", "Frequency Count", "TL",
+        "Delivery Mode", "Active Branches"
+    ])
+
+    # Write one sample row for guidance
+    writer.writerow([
+        "CL-001", "Mon, Wed, Fri", "Team A", "North", "Regular",
+        "Area 1", "Branch 1", "Weekly", "3", "John Doe",
+        "Truck", "Branch 1, Branch 2, Branch 3"
+    ])
+
+    template.seek(0)
+
+    # Return as downloadable CSV file
+    return Response(
+        template.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=clusters_template.csv'}
+    )
+
+# User management routes
+@app.route('/users')
+@login_required
+def manage_users():
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+    users = User.query.all()
+    return render_template('manage_users.html', users=users)
+
+@app.route('/users/add', methods=['POST'])
+@login_required
+def add_user():
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+
+    name = request.form.get('name')
+    email = request.form.get('email')
+    password = request.form.get('password')
+    position = request.form.get('position')
+    status = request.form.get('status', 'active')
+
+    if not name or not email or not password or not position:
+        flash('Name, email, password, and position are required', 'error')
+        return redirect(url_for('manage_users'))
+
+    try:
+        # Check if email already exists
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            flash('Email already exists', 'error')
+            return redirect(url_for('manage_users'))
+
+        user = User(
+            name=name,
+            email=email,
+            position=position,
+            status=status
+        )
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        flash('User added successfully!')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error adding user: {str(e)}', 'error')
+
+    return redirect(url_for('manage_users'))
+
+@app.route('/users/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_user(id):
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+
+    user = User.query.get_or_404(id)
+
+    if request.method == 'POST':
+        try:
+            user.name = request.form.get('name')
+            user.email = request.form.get('email')
+            position = request.form.get('position')
+            status = request.form.get('status', 'active')
+            password = request.form.get('password')
+
+            # Check if email already exists (excluding current user)
+            existing_user = User.query.filter(User.email == user.email, User.id != id).first()
+            if existing_user:
+                flash('Email already exists', 'error')
+                return redirect(url_for('manage_users'))
+
+            user.position = position
+            user.status = status
+
+            # Only update password if provided
+            if password and password.strip():
+                user.set_password(password)
+
+            db.session.commit()
+            flash('User updated successfully!')
+            return redirect(url_for('manage_users'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating user: {str(e)}', 'error')
+
+    return render_template('edit_user.html', user=user)
+
+@app.route('/users/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_user(id):
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+
+    # Prevent deleting yourself
+    if current_user.id == id:
+        flash('You cannot delete your own account', 'error')
+        return redirect(url_for('manage_users'))
+
+    user = User.query.get_or_404(id)
+
+    try:
+        db.session.delete(user)
+        db.session.commit()
+        flash('User deleted successfully!')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting user: {str(e)}', 'error')
+
+    return redirect(url_for('manage_users'))
 
 # API endpoint to fetch documents with specific status and due date
 @app.route('/api/documents', methods=['GET'])
@@ -448,13 +900,18 @@ def search_scheduled():
     return jsonify(result)
 
 @app.route('/schedules')
+@login_required
 def view_schedule():
     schedules = Schedule.query.order_by(Schedule.delivery_schedule.desc()).all()
     return render_template('view_schedule.html', schedules=schedules)
 
 
 @app.route('/schedules/add', methods=['GET', 'POST'])
+@login_required
 def add_schedule():
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
     if request.method == 'POST':
         try:
             delivery_date = datetime.strptime(request.form['delivery_schedule'], '%Y-%m-%d').date()
@@ -605,20 +1062,37 @@ def api_not_scheduled():
         func.group_concat(subq.c.id).label('data_ids')  # Collect all IDs for this doc
     ).group_by(subq.c.document_number).all()
 
+    # Fetch all clusters for lookup (create a dictionary for fast lookup)
+    clusters = Cluster.query.all()
+    cluster_dict = {}
+    for cluster in clusters:
+        if cluster.branch:
+            cluster_dict[cluster.branch.lower()] = cluster.area or ''
+
     documents = []
     for row in results:
         # Determine branch (prefer branch_name, fallback to v2)
         branch = row.branch_name or row.branch_name_v2 or '—'
-        
+        # Match cluster.area using branch_name_v2 to match with cluster.branch
+        branch_v2 = row.branch_name_v2 or row.branch_name or ''
+        area = cluster_dict.get(branch_v2.lower(), '') if branch_v2 else ''
+
         documents.append({
             'document_number': row.document_number,
             'total_cbm': float(row.total_cbm) if row.total_cbm else 0.0,
             'branch': branch,
+            'area': area,
             'due_date': row.due_date.strftime('%Y-%m-%d') if row.due_date else '',
             'data_ids': row.data_ids.split(',')  # List of all Data.id for this doc
         })
 
     return jsonify(documents)
+
+@app.route('/api/areas', methods=['GET'])
+def get_areas():
+    """Get all unique areas from clusters"""
+    areas = db.session.query(Cluster.area).filter(Cluster.area.isnot(None)).filter(Cluster.area != '').distinct().order_by(Cluster.area).all()
+    return jsonify([area[0] for area in areas])
 
 # view_schedule.html individual delete button for each trip
 @app.route('/cancel_trip_detail', methods=['POST'])
@@ -630,28 +1104,28 @@ def cancel_trip_detail():
         trip_number = data.get('trip_number')
         cancel_reason = data.get('cancel_reason')
         cancel_department = data.get('cancel_department')
-        
+
         if not document_number or not schedule_id or not trip_number:
             return jsonify({'success': False, 'message': 'Missing required parameters'}), 400
-            
+
         # Find the trip detail with the given document number
         schedule = Schedule.query.get(schedule_id)
         if not schedule:
             return jsonify({'success': False, 'message': 'Schedule not found'}), 404
-            
+
         trip = Trip.query.filter_by(schedule_id=schedule_id, trip_number=trip_number).first()
         if not trip:
             return jsonify({'success': False, 'message': 'Trip not found'}), 404
-            
+
         trip_detail = TripDetail.query.filter_by(trip_id=trip.id, document_number=document_number).first()
         if not trip_detail:
             return jsonify({'success': False, 'message': 'Trip detail not found'}), 404
-            
+
         # Update the status in trip_detail
         trip_detail.status = "Cancelled"
         trip_detail.cancel_reason = cancel_reason
         trip_detail.cause_department = cancel_department
-        
+
         # Also update the status of all associated Data records
         if trip_detail.data_ids:
             data_ids = trip_detail.data_ids.split(',')
@@ -659,18 +1133,88 @@ def cancel_trip_detail():
                 data_record = Data.query.get(data_id)
                 if data_record:
                     data_record.status = "Not Scheduled"
-                    
+
         db.session.commit()
         return jsonify({'success': True})
-        
+
     except Exception as e:
         db.session.rollback()
-        return jsonify({'success': False, 'message': str(e)}), 500\
-            
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/record_arrival', methods=['POST'])
+def record_arrival():
+    try:
+        data = request.get_json()
+        document_number = data.get('document_number')
+        schedule_id = data.get('schedule_id')
+        trip_number = data.get('trip_number')
+        reason = data.get('reason', '')
+
+        if not document_number or not schedule_id or not trip_number:
+            return jsonify({'success': False, 'message': 'Missing required parameters'}), 400
+
+        # Find the trip detail
+        trip = Trip.query.filter_by(schedule_id=schedule_id, trip_number=trip_number).first()
+        if not trip:
+            return jsonify({'success': False, 'message': 'Trip not found'}), 404
+
+        trip_detail = TripDetail.query.filter_by(trip_id=trip.id, document_number=document_number).first()
+        if not trip_detail:
+            return jsonify({'success': False, 'message': 'Trip detail not found'}), 404
+
+        # Record arrival time and reason
+        trip_detail.arrive = datetime.now()
+        trip_detail.reason = reason
+
+        db.session.commit()
+        return jsonify({'success': True, 'arrive_time': trip_detail.arrive.strftime('%Y-%m-%d %H:%M:%S')})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/record_departure', methods=['POST'])
+def record_departure():
+    try:
+        data = request.get_json()
+        document_number = data.get('document_number')
+        schedule_id = data.get('schedule_id')
+        trip_number = data.get('trip_number')
+        reason = data.get('reason', '')
+
+        if not document_number or not schedule_id or not trip_number:
+            return jsonify({'success': False, 'message': 'Missing required parameters'}), 400
+
+        # Find the trip detail
+        trip = Trip.query.filter_by(schedule_id=schedule_id, trip_number=trip_number).first()
+        if not trip:
+            return jsonify({'success': False, 'message': 'Trip not found'}), 404
+
+        trip_detail = TripDetail.query.filter_by(trip_id=trip.id, document_number=document_number).first()
+        if not trip_detail:
+            return jsonify({'success': False, 'message': 'Trip detail not found'}), 404
+
+        # Record departure time and reason
+        trip_detail.departure = datetime.now()
+        if reason:
+            trip_detail.reason = reason
+
+        db.session.commit()
+        return jsonify({'success': True, 'departure_time': trip_detail.departure.strftime('%Y-%m-%d %H:%M:%S')})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
             
 # Reports page route
 @app.route('/reports')
+@login_required
 def reports():
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
     return render_template('reports.html')
 
 # Report generation routes

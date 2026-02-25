@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Cluster - Trip Monitoring System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Edit Cluster</h1>
+    <a href="{{ url_for('manage_clusters') }}" class="btn btn-secondary">Back to Clusters</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="no" class="form-label">No.</label>
+                    <input type="text" class="form-control" id="no" name="no" value="{{ cluster.no }}" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="weekly_schedule" class="form-label">Weekly Schedule</label>
+                    <input type="text" class="form-control" id="weekly_schedule" name="weekly_schedule" value="{{ cluster.weekly_schedule or '' }}">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="delivered_by" class="form-label">Delivered By</label>
+                    <input type="text" class="form-control" id="delivered_by" name="delivered_by" value="{{ cluster.delivered_by or '' }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="location" class="form-label">Location</label>
+                    <input type="text" class="form-control" id="location" name="location" value="{{ cluster.location or '' }}">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="category" class="form-label">Category</label>
+                    <input type="text" class="form-control" id="category" name="category" value="{{ cluster.category or '' }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="area" class="form-label">Area</label>
+                    <input type="text" class="form-control" id="area" name="area" value="{{ cluster.area or '' }}">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="branch" class="form-label">Branch</label>
+                    <input type="text" class="form-control" id="branch" name="branch" value="{{ cluster.branch or '' }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="frequency" class="form-label">Frequency</label>
+                    <input type="text" class="form-control" id="frequency" name="frequency" value="{{ cluster.frequency or '' }}">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="frequency_count" class="form-label">Frequency Count</label>
+                    <input type="text" class="form-control" id="frequency_count" name="frequency_count" value="{{ cluster.frequency_count or '' }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="tl" class="form-label">TL</label>
+                    <input type="text" class="form-control" id="tl" name="tl" value="{{ cluster.tl or '' }}">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="delivery_mode" class="form-label">Delivery Mode</label>
+                    <input type="text" class="form-control" id="delivery_mode" name="delivery_mode" value="{{ cluster.delivery_mode or '' }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="active_branches" class="form-label">Active Branches</label>
+                    <textarea class="form-control" id="active_branches" name="active_branches" rows="1">{{ cluster.active_branches or '' }}</textarea>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Update Cluster</button>
+                <a href="{{ url_for('manage_clusters') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

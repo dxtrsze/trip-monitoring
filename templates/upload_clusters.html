@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Clusters CSV - Trip Monitoring System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Upload Clusters CSV</h1>
+    <a href="{{ url_for('manage_clusters') }}" class="btn btn-secondary">Back to Clusters</a>
+</div>
+
+<div class="alert alert-warning">
+    <strong>Warning:</strong> Uploading a new CSV file will delete all existing cluster data and replace it with the uploaded data.
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="file" class="form-label">Select CSV File</label>
+                <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
+            </div>
+
+            <div class="mb-3">
+                <h5>Expected CSV Format:</h5>
+                <p>The CSV file should have the following columns:</p>
+                <ul>
+                    <li><strong>No.</strong> - Cluster number (required)</li>
+                    <li><strong>Weekly Schedule</strong> - Weekly schedule</li>
+                    <li><strong>Delivered By</strong> - Delivery person/team</li>
+                    <li><strong>Location</strong> - Location</li>
+                    <li><strong>Category</strong> - Category</li>
+                    <li><strong>Area</strong> - Area</li>
+                    <li><strong>Branch</strong> - Branch</li>
+                    <li><strong>Frequency</strong> - Frequency</li>
+                    <li><strong>Frequency Count</strong> - Frequency count</li>
+                    <li><strong>TL</strong> - Team Lead</li>
+                    <li><strong>Delivery Mode</strong> - Delivery mode</li>
+                    <li><strong>Active Branches</strong> - Active branches</li>
+                </ul>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Upload CSV</button>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5>Download Template</h5>
+    </div>
+    <div class="card-body">
+        <p>Download a CSV template to get started with the correct format.</p>
+        <a href="{{ url_for('download_clusters_template') }}" class="btn btn-success">Download Template</a>
+    </div>
+</div>
+{% endblock %}

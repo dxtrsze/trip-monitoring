@@ -8,10 +8,17 @@
   <!-- Step 1: Select Date -->
   <div class="card mb-4">
     <div class="card-body">
-      <div class="mb-3">
-        <label class="form-label">Delivery Date *</label>
-        <input type="date" class="form-control" name="delivery_schedule" id="deliveryDate" required>
-        <div class="form-text">Select a due date to load shipments</div>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Delivery Date *</label>
+          <input type="date" class="form-control" name="delivery_schedule" id="deliveryDate" required>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Filter by Area</label>
+          <select class="form-select" id="areaFilter">
+            <option value="">All Areas</option>
+          </select>
+        </div>
       </div>
       <button type="button" class="btn btn-primary" id="loadBtn">Load Available Shipments</button>
       <a href="{{ url_for('view_schedule') }}" class="btn btn-secondary">Cancel</a>
@@ -29,7 +36,7 @@
       <button type="submit" class="btn btn-success">Save Schedule</button>
     </div>
     <div class="card mb-4">
-      <div class="card-header">Available Shipments (<span id="shipmentCount">0</span>)</div>
+      <div class="card-header">Available Shipments (<span id="shipmentCount">0</span> <span id="totalCountDisplay"></span>)</div>
       <div class="card-body">
         <div id="shipmentsList"></div>
       </div>
@@ -42,6 +49,41 @@
 <script>
 let tripCounter = 0;
 let shipments = [];
+let allShipments = []; // Store all shipments for filtering
+
+// Load areas when page loads
+document.addEventListener('DOMContentLoaded', function() {
+  fetch('/api/areas')
+    .then(res => res.json())
+    .then(areas => {
+      const areaFilter = document.getElementById('areaFilter');
+      areas.forEach(area => {
+        const option = document.createElement('option');
+        option.value = area;
+        option.textContent = area;
+        areaFilter.appendChild(option);
+      });
+    });
+});
+
+// Filter shipments when area changes
+document.getElementById('areaFilter').addEventListener('change', function() {
+  filterShipments();
+});
+
+function filterShipments() {
+  const selectedArea = document.getElementById('areaFilter').value;
+
+  if (!selectedArea) {
+    // Show all shipments
+    shipments = allShipments;
+  } else {
+    // Filter by selected area
+    shipments = allShipments.filter(item => item.area === selectedArea);
+  }
+
+  renderShipments();
+}
 
 document.getElementById('loadBtn').addEventListener('click', function() {
   const date = document.getElementById('deliveryDate').value;
@@ -58,8 +100,9 @@ document.getElementById('loadBtn').addEventListener('click', function() {
   fetch(`/api/not_scheduled?due_date=${date}`)
     .then(res => res.json())
     .then(data => {
-      shipments = data;
-      renderShipments();
+      allShipments = data;
+      // Apply area filter if one is selected
+      filterShipments();
       document.getElementById('shipmentsSection').style.display = 'block';
     });
 });
@@ -67,10 +110,23 @@ document.getElementById('loadBtn').addEventListener('click', function() {
 function renderShipments() {
   const container = document.getElementById('shipmentsList');
   const countEl = document.getElementById('shipmentCount');
+  const totalDisplayEl = document.getElementById('totalCountDisplay');
+
   countEl.textContent = shipments.length;
 
+  // Show total count if filtering
+  if (allShipments.length > 0 && shipments.length !== allShipments.length) {
+    totalDisplayEl.textContent = `/ ${allShipments.length} total`;
+  } else {
+    totalDisplayEl.textContent = '';
+  }
+
   if (shipments.length === 0) {
-    container.innerHTML = '<p class="text-muted">No unscheduled shipments found.</p>';
+    if (allShipments.length > 0) {
+      container.innerHTML = '<p class="text-muted">No shipments found for the selected area filter.</p>';
+    } else {
+      container.innerHTML = '<p class="text-muted">No unscheduled shipments found.</p>';
+    }
     return;
   }
 
@@ -79,19 +135,21 @@ function renderShipments() {
       <th>Select</th>
       <th>Doc #</th>
       <th>Branch</th>
+      <th>Area</th>
       <th>Due Date</th>
       <th>Total CBM</th>
     </tr></thead><tbody>`;
-  
+
   shipments.forEach(item => {
     // Check if this shipment is already assigned to any trip (only check within trips container)
     const isAssigned = document.querySelector(`#tripsContainer [data-ids*="${item.data_ids[0]}"]`) ? true : false;
-    
+
     html += `
       <tr ${isAssigned ? 'class="table-secondary"' : ''}>
         <td><input type="checkbox" class="shipment-checkbox" data-ids="${item.data_ids.join(',')}" data-cbm="${item.total_cbm}" ${isAssigned ? 'disabled' : ''}></td>
         <td>${item.document_number} ${isAssigned ? '<span class="badge bg-secondary ms-1">Assigned</span>' : ''}</td>
         <td>${item.branch}</td>
+        <td>${item.area}</td>
         <td>${item.due_date}</td>
         <td>${item.total_cbm.toFixed(2)}</td>
       </tr>`;

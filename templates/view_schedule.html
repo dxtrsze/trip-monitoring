@@ -44,7 +44,10 @@
               <th>Branch</th>
               <th>CBM</th>
               <th>Status</th>
+              <th>Arrive</th>
+              <th>Departure</th>
               <th>Action</th>
+              <th>Reason</th>
             </tr></thead>
             <tbody>
               {% for detail in trip.details %}
@@ -56,13 +59,34 @@
                 <td>{{ "%.2f"|format(detail.total_cbm) }}</td>
                 <td><span class="badge bg-secondary">{{ detail.status }}</span></td>
                 <td>
+                  {% if detail.arrive %}
+                    <span class="text-success">{{ detail.arrive.strftime('%Y-%m-%d %H:%M') }}</span>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if detail.departure %}
+                    <span class="text-primary">{{ detail.departure.strftime('%Y-%m-%d %H:%M') }}</span>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+                <td>
                   {% if detail.status == "Delivered" %}
-                  <button class="btn btn-sm btn-danger" onclick="cancelTripDetail('{{ detail.document_number }}', {{ schedule.id }}, {{ trip.trip_number }})">Cancel</button>
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button class="btn btn-sm btn-success" onclick="recordArrival('{{ detail.document_number }}', {{ schedule.id }}, {{ trip.trip_number }}, this)" {% if detail.arrive %}disabled{% endif %}>In</button>
+                    <button class="btn btn-sm btn-primary" onclick="recordDeparture('{{ detail.document_number }}', {{ schedule.id }}, {{ trip.trip_number }}, this)" {% if detail.departure %}disabled{% endif %}>Out</button>
+                    <button class="btn btn-sm btn-danger" onclick="cancelTripDetail('{{ detail.document_number }}', {{ schedule.id }}, {{ trip.trip_number }})">Cancel</button>
+                  </div>
                   {% elif detail.status == "Not Scheduled" %}
                   <span class="badge bg-secondary">Cancelled</span>
                   {% else %}
                   <span class="badge bg-secondary">{{ detail.status }}</span>
                   {% endif %}
+                </td>
+                <td>
+                  <input type="text" class="form-control form-control-sm" id="reason_{{ detail.id }}" placeholder="Reason (optional)" value="{{ detail.reason or '' }}">
                 </td>
               </tr>
               {% endfor %}
@@ -226,5 +250,73 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('cancelDepartment').value = '';
   });
 });
+
+// Function to record arrival (In button)
+function recordArrival(documentNumber, scheduleId, tripNumber, button) {
+  // Find the reason input field for this row
+  const row = button.closest('tr');
+  const reasonInput = row.querySelector('input[id^="reason_"]');
+  const reason = reasonInput ? reasonInput.value : '';
+
+  // Send the arrival request
+  fetch('/record_arrival', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      document_number: documentNumber,
+      schedule_id: scheduleId,
+      trip_number: tripNumber,
+      reason: reason
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert('Error recording arrival: ' + data.message);
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('An error occurred while recording arrival');
+  });
+}
+
+// Function to record departure (Out button)
+function recordDeparture(documentNumber, scheduleId, tripNumber, button) {
+  // Find the reason input field for this row
+  const row = button.closest('tr');
+  const reasonInput = row.querySelector('input[id^="reason_"]');
+  const reason = reasonInput ? reasonInput.value : '';
+
+  // Send the departure request
+  fetch('/record_departure', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      document_number: documentNumber,
+      schedule_id: scheduleId,
+      trip_number: tripNumber,
+      reason: reason
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert('Error recording departure: ' + data.message);
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('An error occurred while recording departure');
+  });
+}
 </script>
 {% endblock %}
