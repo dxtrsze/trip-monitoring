@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
+from datetime import datetime
 
 db = SQLAlchemy()
 
@@ -15,6 +16,8 @@ class Manpower(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     role = db.Column(db.String(50), nullable=False)  # "Driver", "Assistant"
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # Optional link to User
+    user = db.relationship('User', backref=db.backref('manpower', uselist=False, lazy=True))
 
     def __repr__(self):
         return f'<Manpower {self.name} - {self.role}>'
@@ -88,8 +91,9 @@ class Trip(db.Model):
 class TripDetail(db.Model):
     __tablename__ = 'trip_detail'
     id = db.Column(db.Integer, primary_key=True)
-    document_number = db.Column(db.String(100), nullable=False)  # Store document number directly
-    data_ids = db.Column(db.Text)  # Store comma-separated list of data IDs for this document
+    document_number = db.Column(db.String(100), nullable=True)  # Store document number (optional, for reference)
+    branch_name_v2 = db.Column(db.String(100), nullable=False)  # Store branch name for grouping
+    data_ids = db.Column(db.Text)  # Store comma-separated list of data IDs for this branch
     area = db.Column(db.String(100))
 
     # Aggregated values
@@ -109,7 +113,7 @@ class TripDetail(db.Model):
     reason = db.Column(db.Text)  # Reason for arrival/departure notes
 
     def __repr__(self):
-        return f'<TripDetail {self.id} - Document {self.document_number} - Trip {self.trip_id}>'
+        return f'<TripDetail {self.id} - Branch {self.branch_name_v2} - Trip {self.trip_id}>'
 
 class Cluster(db.Model):
     __tablename__ = 'cluster'
@@ -129,6 +133,22 @@ class Cluster(db.Model):
 
     def __repr__(self):
         return f'<Cluster {self.no} - {self.branch}>'
+
+class Odo(db.Model):
+    __tablename__ = 'odo'
+    id = db.Column(db.Integer, primary_key=True)
+    plate_number = db.Column(db.String(50), db.ForeignKey('vehicle.plate_number'), nullable=False)
+    vehicle = db.relationship('Vehicle', backref=db.backref('odo_readings', lazy=True))
+    odometer_reading = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(50), nullable=False)  # 'start odo', 'refill odo', 'end odo'
+    datetime = db.Column(db.DateTime, nullable=False, default=datetime.now)
+    created_by = db.Column(db.String(100), nullable=False)  # User who created the record
+    litters = db.Column(db.Float, nullable=True)  # Fuel litters for refill
+    amount = db.Column(db.Float, nullable=True)  # Cost amount for refill
+    price_per_litter = db.Column(db.Float, nullable=True)  # Computed: amount / litters
+
+    def __repr__(self):
+        return f'<Odo {self.id} - {self.plate_number} - {self.status}>'
 
 class User(UserMixin, db.Model):
     __tablename__ = 'user'

@@ -6,7 +6,7 @@ from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import pandas as pd
-from models import db, Vehicle, Manpower, Data, Schedule, Trip, TripDetail, Cluster, User
+from models import db, Vehicle, Manpower, Data, Schedule, Trip, TripDetail, Cluster, User, Odo
 from sqlalchemy import func
 from functools import wraps
 
@@ -33,7 +33,7 @@ login_manager.login_message = 'Please log in to access this page.'
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 # Create tables
 with app.app_context():
@@ -401,7 +401,7 @@ def manage_vehicles():
     if current_user.position != 'admin':
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('view_schedule'))
-    vehicles = Vehicle.query.all()
+    vehicles = Vehicle.query.order_by(Vehicle.plate_number).all()
     return render_template('manage_vehicles.html', vehicles=vehicles)
 
 @app.route('/vehicles/add', methods=['POST'])
@@ -443,11 +443,18 @@ def manage_manpower():
     if current_user.position != 'admin':
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('view_schedule'))
-    manpower = Manpower.query.all()
-    return render_template('manage_manpower.html', manpower=manpower)
+    manpower = Manpower.query.order_by(Manpower.name).all()
+    users = User.query.filter_by(position='user').all()
+    return render_template('manage_manpower.html', manpower=manpower, users=users)
 
 @app.route('/manpower/add', methods=['POST'])
+@login_required
 def add_manpower():
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('manage_manpower'))
+
+    user_id = request.form.get('user_id')
     name = request.form.get('name')
     role = request.form.get('role')
 
@@ -456,7 +463,16 @@ def add_manpower():
         return redirect(url_for('manage_manpower'))
 
     try:
+        # If user is selected, use their name (override the provided name)
+        if user_id and user_id.strip():
+            user = db.session.get(User, int(user_id))
+            if user:
+                name = user.name
+
         person = Manpower(name=name, role=role)
+        if user_id and user_id.strip():
+            person.user_id = int(user_id)
+
         db.session.add(person)
         db.session.commit()
         flash('Manpower added successfully!')
@@ -902,7 +918,30 @@ def search_scheduled():
 @app.route('/schedules')
 @login_required
 def view_schedule():
-    schedules = Schedule.query.order_by(Schedule.delivery_schedule.desc()).all()
+    if current_user.position == 'admin':
+        # Admins see all schedules
+        schedules = Schedule.query.order_by(Schedule.delivery_schedule.desc()).all()
+    else:
+        # Regular users only see schedules where they are assigned
+        # Get the user's associated manpower entry
+        user_manpower = getattr(current_user, 'manpower', None)
+
+        if user_manpower:
+            # Find all trips where this manpower is a driver or assistant
+            trips = Trip.query.filter(
+                db.or_(
+                    Trip.drivers.any(id=user_manpower.id),
+                    Trip.assistants.any(id=user_manpower.id)
+                )
+            ).all()
+
+            # Get unique schedules from these trips
+            schedule_ids = list(set([trip.schedule_id for trip in trips]))
+            schedules = Schedule.query.filter(Schedule.id.in_(schedule_ids)).order_by(Schedule.delivery_schedule.desc()).all()
+        else:
+            # User has no associated manpower entry - show no schedules
+            schedules = []
+
     return render_template('view_schedule.html', schedules=schedules)
 
 
@@ -949,14 +988,14 @@ def add_schedule():
                 # ✅ Assign MULTIPLE drivers
                 trip.drivers.clear()  # Optional (new trip, so empty anyway)
                 for did in driver_ids:
-                    driver = Manpower.query.get(did)
+                    driver = db.session.get(Manpower, did)
                     if driver:
                         trip.drivers.append(driver)
 
                 # ✅ Assign MULTIPLE assistants
                 trip.assistants.clear()
                 for aid in assistant_ids:
-                    assistant = Manpower.query.get(aid)
+                    assistant = db.session.get(Manpower, aid)
                     if assistant:
                         trip.assistants.append(assistant)
                 db.session.add(trip)
@@ -964,12 +1003,12 @@ def add_schedule():
 
                 # Add all selected drivers and assistants to the trip
                 for driver_id in driver_ids:
-                    driver = Manpower.query.get(driver_id)
+                    driver = db.session.get(Manpower, driver_id)
                     if driver and driver not in trip.drivers:
                         trip.drivers.append(driver)
 
                 for assistant_id in assistant_ids:
-                    assistant = Manpower.query.get(assistant_id)
+                    assistant = db.session.get(Manpower, assistant_id)
                     if assistant and assistant not in trip.assistants:
                         trip.assistants.append(assistant)
 
@@ -978,44 +1017,47 @@ def add_schedule():
                 # Split the comma-separated string into individual IDs
                 data_ids = data_ids_str.split(',') if data_ids_str else []
 
-                # Group data by document_number to create aggregated TripDetail entries
-                doc_groups = {}
+                # Group data by branch_name_v2 to create aggregated TripDetail entries
+                branch_groups = {}
                 for data_id in data_ids:
                     if not data_id:
                         continue
-                    data = Data.query.get(data_id)
+                    data = db.session.get(Data, data_id)
                     if data:
-                        doc_num = data.document_number
-                        if doc_num not in doc_groups:
-                            doc_groups[doc_num] = {
+                        branch_name = data.branch_name_v2 or data.branch_name or 'Unknown'
+                        if branch_name not in branch_groups:
+                            branch_groups[branch_name] = {
                                 'data_ids': [],
+                                'document_numbers': [],
                                 'total_cbm': 0.0,
                                 'total_ordered_qty': 0,
                                 'area': data.branch_name or data.branch_name_v2 or ''
                             }
 
-                        doc_groups[doc_num]['data_ids'].append(data.id)
-                        doc_groups[doc_num]['total_cbm'] += data.cbm * data.ordered_qty or 0.0
-                        doc_groups[doc_num]['total_ordered_qty'] += data.ordered_qty or 0
+                        branch_groups[branch_name]['data_ids'].append(data.id)
+                        branch_groups[branch_name]['document_numbers'].append(data.document_number)
+                        branch_groups[branch_name]['total_cbm'] += data.cbm * data.ordered_qty or 0.0
+                        branch_groups[branch_name]['total_ordered_qty'] += data.ordered_qty or 0
 
                         # Mark as Scheduled
                         data.status = "Scheduled"
                         data.delivered_qty = data.ordered_qty or 0.0
 
-                # Create aggregated TripDetail entries
+                # Create aggregated TripDetail entries grouped by branch
                 trip_total_cbm = 0.0
-                for doc_num, doc_data in doc_groups.items():
+                for branch_name, branch_data in branch_groups.items():
                     detail = TripDetail(
-                        document_number=doc_num,
-                        data_ids=','.join(str(id) for id in doc_data['data_ids']),
+                        document_number=branch_data['document_numbers'][0],  # Store first doc number for reference
+                        branch_name_v2=branch_name,
+                        data_ids=','.join(str(id) for id in branch_data['data_ids']),
                         trip_id=trip.id,
-                        area=doc_data['area'],
-                        total_cbm=doc_data['total_cbm'],
-                        total_ordered_qty=doc_data['total_ordered_qty'],
+                        area=branch_data['area'],
+                        total_cbm=branch_data['total_cbm'],
+                        total_ordered_qty=branch_data['total_ordered_qty'],
                         status="Delivered"
                     )
                     db.session.add(detail)
-                    trip_total_cbm += doc_data['total_cbm']
+                    trip_total_cbm += branch_data['total_cbm']
 
                 trip.total_cbm = trip_total_cbm
 
@@ -1029,9 +1071,9 @@ def add_schedule():
             return redirect(request.url)
 
     # GET: Load resources for form
-    vehicles = Vehicle.query.all()
-    drivers = Manpower.query.filter_by(role='Driver').all()
-    assistants = Manpower.query.filter_by(role='Assistant').all()
+    vehicles = Vehicle.query.order_by(Vehicle.plate_number).all()
+    drivers = Manpower.query.filter_by(role='Driver').order_by(Manpower.name).all()
+    assistants = Manpower.query.filter_by(role='Assistant').order_by(Manpower.name).all()
     return render_template('add_schedule.html',
                          vehicles=vehicles,
                          drivers=drivers,
@@ -1099,17 +1141,17 @@ def get_areas():
 def cancel_trip_detail():
     try:
         data = request.get_json()
-        document_number = data.get('document_number')
+        branch_name = data.get('branch_name_v2')
         schedule_id = data.get('schedule_id')
         trip_number = data.get('trip_number')
         cancel_reason = data.get('cancel_reason')
         cancel_department = data.get('cancel_department')
 
-        if not document_number or not schedule_id or not trip_number:
+        if not branch_name or not schedule_id or not trip_number:
             return jsonify({'success': False, 'message': 'Missing required parameters'}), 400
 
-        # Find the trip detail with the given document number
-        schedule = Schedule.query.get(schedule_id)
+        # Find the trip detail with the given branch name
+        schedule = db.session.get(Schedule, schedule_id)
         if not schedule:
             return jsonify({'success': False, 'message': 'Schedule not found'}), 404
 
@@ -1117,7 +1159,7 @@ def cancel_trip_detail():
         if not trip:
             return jsonify({'success': False, 'message': 'Trip not found'}), 404
 
-        trip_detail = TripDetail.query.filter_by(trip_id=trip.id, document_number=document_number).first()
+        trip_detail = TripDetail.query.filter_by(trip_id=trip.id, branch_name_v2=branch_name).first()
         if not trip_detail:
             return jsonify({'success': False, 'message': 'Trip detail not found'}), 404
 
@@ -1130,7 +1172,7 @@ def cancel_trip_detail():
         if trip_detail.data_ids:
             data_ids = trip_detail.data_ids.split(',')
             for data_id in data_ids:
-                data_record = Data.query.get(data_id)
+                data_record = db.session.get(Data, data_id)
                 if data_record:
                     data_record.status = "Not Scheduled"
 
@@ -1146,12 +1188,12 @@ def cancel_trip_detail():
 def record_arrival():
     try:
         data = request.get_json()
-        document_number = data.get('document_number')
+        branch_name = data.get('branch_name_v2')
         schedule_id = data.get('schedule_id')
         trip_number = data.get('trip_number')
         reason = data.get('reason', '')
 
-        if not document_number or not schedule_id or not trip_number:
+        if not branch_name or not schedule_id or not trip_number:
             return jsonify({'success': False, 'message': 'Missing required parameters'}), 400
 
         # Find the trip detail
@@ -1159,7 +1201,7 @@ def record_arrival():
         if not trip:
             return jsonify({'success': False, 'message': 'Trip not found'}), 404
 
-        trip_detail = TripDetail.query.filter_by(trip_id=trip.id, document_number=document_number).first()
+        trip_detail = TripDetail.query.filter_by(trip_id=trip.id, branch_name_v2=branch_name).first()
         if not trip_detail:
             return jsonify({'success': False, 'message': 'Trip detail not found'}), 404
 
@@ -1179,12 +1221,12 @@ def record_arrival():
 def record_departure():
     try:
         data = request.get_json()
-        document_number = data.get('document_number')
+        branch_name = data.get('branch_name_v2')
         schedule_id = data.get('schedule_id')
         trip_number = data.get('trip_number')
         reason = data.get('reason', '')
 
-        if not document_number or not schedule_id or not trip_number:
+        if not branch_name or not schedule_id or not trip_number:
             return jsonify({'success': False, 'message': 'Missing required parameters'}), 400
 
         # Find the trip detail
@@ -1192,7 +1234,7 @@ def record_departure():
         if not trip:
             return jsonify({'success': False, 'message': 'Trip not found'}), 404
 
-        trip_detail = TripDetail.query.filter_by(trip_id=trip.id, document_number=document_number).first()
+        trip_detail = TripDetail.query.filter_by(trip_id=trip.id, branch_name_v2=branch_name).first()
         if not trip_detail:
             return jsonify({'success': False, 'message': 'Trip detail not found'}), 404
 
@@ -1207,7 +1249,107 @@ def record_departure():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
-            
+
+
+# Odometer reading routes
+@app.route('/record_odo', methods=['POST'])
+@login_required
+def record_odo():
+    try:
+        data = request.get_json()
+        plate_number = data.get('plate_number')
+        odometer_reading = data.get('odometer_reading')
+        status = data.get('status')  # 'start odo', 'refill odo', or 'end odo'
+        litters = data.get('litters')  # Optional: only for refill odo
+        amount = data.get('amount')  # Optional: only for refill odo
+
+        if not plate_number or not odometer_reading or not status:
+            return jsonify({'success': False, 'message': 'Missing required parameters'}), 400
+
+        # Validate vehicle exists
+        vehicle = Vehicle.query.filter_by(plate_number=plate_number).first()
+        if not vehicle:
+            return jsonify({'success': False, 'message': 'Vehicle not found'}), 404
+
+        # Compute price_per_litter if both litters and amount are provided
+        price_per_litter = None
+        if litters and amount and float(litters) > 0:
+            price_per_litter = float(amount) / float(litters)
+
+        # Create odometer reading
+        odo = Odo(
+            plate_number=plate_number,
+            odometer_reading=float(odometer_reading),
+            status=status,
+            created_by=current_user.name,
+            litters=float(litters) if litters else None,
+            amount=float(amount) if amount else None,
+            price_per_litter=price_per_litter
+        )
+
+        db.session.add(odo)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'{status.replace("_", " ").title()} recorded successfully',
+            'datetime': odo.datetime.strftime('%Y-%m-%d %H:%M:%S')
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# Odometer logs view route
+@app.route('/odo_logs')
+@login_required
+def odo_logs():
+    # Get filter parameters
+    vehicle_filter = request.args.get('vehicle', '')
+    status_filter = request.args.get('status', '')
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+
+    # Build query
+    query = Odo.query
+
+    # Apply filters if provided
+    if vehicle_filter:
+        query = query.filter(Odo.plate_number == vehicle_filter)
+    if status_filter:
+        query = query.filter(Odo.status == status_filter)
+    if start_date:
+        try:
+            start = datetime.strptime(start_date, '%Y-%m-%d')
+            query = query.filter(Odo.datetime >= start)
+        except ValueError:
+            pass
+    if end_date:
+        try:
+            end = datetime.strptime(end_date, '%Y-%m-%d')
+            # Include the entire end date
+            from datetime import timedelta
+            end = end + timedelta(days=1)
+            query = query.filter(Odo.datetime < end)
+        except ValueError:
+            pass
+
+    # Order by datetime descending (newest first)
+    odo_logs = query.order_by(Odo.datetime.desc()).all()
+
+    # Get all vehicles for the filter dropdown
+    vehicles = Vehicle.query.all()
+
+    return render_template('odo_logs.html',
+                         odo_logs=odo_logs,
+                         vehicles=vehicles,
+                         vehicle_filter=vehicle_filter,
+                         status_filter=status_filter,
+                         start_date=start_date,
+                         end_date=end_date)
+
+
 # Reports page route
 @app.route('/reports')
 @login_required
@@ -1507,7 +1649,7 @@ def update_grid():
             data_id, posting_date, document_number, item_number, ordered_qty, total_cbm, delivered_qty, branch_name, status, due_date = row
             
             if data_id:  # Existing data
-                data = Data.query.get(data_id)
+                data = db.session.get(Data, data_id)
                 if data:
                     data.posting_date = datetime.strptime(posting_date, '%Y-%m-%d').date() if posting_date else None
                     data.document_number = document_number

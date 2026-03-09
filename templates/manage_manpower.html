@@ -23,6 +23,7 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Name</th>
+                                <th>Linked User</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -32,6 +33,13 @@
                             <tr>
                                 <td>{{ person.id }}</td>
                                 <td>{{ person.name }}</td>
+                                <td>
+                                    {% if person.user %}
+                                    <span class="badge bg-success">{{ person.user.email }}</span>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <form method="post" action="{{ url_for('delete_manpower', id=person.id) }}" class="d-inline">
                                         <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this driver?')">
@@ -61,6 +69,7 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Name</th>
+                                <th>Linked User</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -70,6 +79,13 @@
                             <tr>
                                 <td>{{ person.id }}</td>
                                 <td>{{ person.name }}</td>
+                                <td>
+                                    {% if person.user %}
+                                    <span class="badge bg-success">{{ person.user.email }}</span>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <form method="post" action="{{ url_for('delete_manpower', id=person.id) }}" class="d-inline">
                                         <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this assistant?')">
@@ -99,6 +115,18 @@
             <form method="post" action="{{ url_for('add_manpower') }}">
                 <div class="modal-body">
                     <div class="mb-3">
+                        <label for="user_id" class="form-label">Link to User (Optional)</label>
+                        <select class="form-select" id="user_id" name="user_id">
+                            <option value="">No User - Manual Entry</option>
+                            {% for user in users %}
+                            {% if user.position == 'user' %}
+                            <option value="{{ user.id }}" data-name="{{ user.name }}">{{ user.name }} ({{ user.email }})</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Link to an existing user to standardize the name. If selected, the name will be automatically filled.</div>
+                    </div>
+                    <div class="mb-3">
                         <label for="name" class="form-label">Name</label>
                         <input type="text" class="form-control" id="name" name="name" required>
                     </div>
@@ -119,4 +147,19 @@
         </div>
     </div>
 </div>
+
+<script>
+document.getElementById('user_id').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const nameInput = document.getElementById('name');
+
+    if (selectedOption.value) {
+        // Get name from data attribute
+        const name = selectedOption.getAttribute('data-name');
+        nameInput.value = name;
+    } else {
+        nameInput.value = '';
+    }
+});
+</script>
 {% endblock %}

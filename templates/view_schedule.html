@@ -4,9 +4,12 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h1>Delivery Schedules</h1>
-  {% if current_user.position == 'admin' %}
-  <a href="{{ url_for('add_schedule') }}" class="btn btn-primary">+ New Schedule</a>
-  {% endif %}
+  <div>
+    <a href="{{ url_for('odo_logs') }}" class="btn btn-info me-2">View Odo Logs</a>
+    {% if current_user.position == 'admin' %}
+    <a href="{{ url_for('add_schedule') }}" class="btn btn-primary">+ New Schedule</a>
+    {% endif %}
+  </div>
 </div>
 
 {% for schedule in schedules %}
@@ -26,38 +29,62 @@
         </h6>
         <p>
           <strong>Vehicle:</strong> {{ trip.vehicle.plate_number }}<br>
-          <strong>Drivers:</strong> 
+          <strong>Drivers:</strong>
           {% for driver in trip.drivers %}
             {{ driver.name }}{% if not loop.last %}, {% endif %}
           {% endfor %}<br>
           {% if trip.assistants %}
-          <strong>Assistants:</strong> 
+          <strong>Assistants:</strong>
           {% for assistant in trip.assistants %}
             {{ assistant.name }}{% if not loop.last %}, {% endif %}
           {% endfor %}<br>
           {% endif %}
         </p>
+
+        <!-- Odometer Readings -->
+        <div class="row g-2 mb-3">
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Start Odo</label>
+            <div class="input-group input-group-sm">
+              <input type="number" class="form-control" id="start_odo_{{ trip.id }}" placeholder="0" step="0.1">
+              <button class="btn btn-outline-success" type="button" onclick="recordOdo('{{ trip.vehicle.plate_number }}', 'start odo', {{ trip.id }})">Submit</button>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Refill Odo</label>
+            <div class="input-group input-group-sm mb-1">
+              <input type="number" class="form-control" id="refill_odo_{{ trip.id }}" placeholder="Odo" step="0.1">
+              <input type="number" class="form-control" id="refill_litters_{{ trip.id }}" placeholder="Liters" step="0.1">
+              <input type="number" class="form-control" id="refill_amount_{{ trip.id }}" placeholder="Amount" step="0.01">
+              <button class="btn btn-outline-primary" type="button" onclick="recordOdo('{{ trip.vehicle.plate_number }}', 'refill odo', {{ trip.id }})">Submit</button>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small mb-1">End Odo</label>
+            <div class="input-group input-group-sm">
+              <input type="number" class="form-control" id="end_odo_{{ trip.id }}" placeholder="0" step="0.1">
+              <button class="btn btn-outline-danger" type="button" onclick="recordOdo('{{ trip.vehicle.plate_number }}', 'end odo', {{ trip.id }})">Submit</button>
+            </div>
+          </div>
+        </div>
         <div class="table-responsive">
           <table class="table table-sm">
             <thead><tr>
-              <th>Doc #</th>
-              <!-- <th>Item</th> -->
-              <th>Order Qty</th>
               <th>Branch</th>
+              <th>Order Qty</th>
               <th>CBM</th>
               <th>Status</th>
               <th>Arrive</th>
               <th>Departure</th>
               <th>Action</th>
+              <th>Remarks</th>
               <th>Reason</th>
             </tr></thead>
             <tbody>
               {% for detail in trip.details %}
-              <tr>
-                <td>{{ detail.document_number }}</td>
-                <!-- <td>—</td> -->
+              <tr data-branch-name="{{ detail.branch_name_v2 }}" data-schedule-id="{{ schedule.id }}" data-trip-number="{{ trip.trip_number }}">
+                <td>{{ detail.branch_name_v2 }}</td>
                 <td>{{ detail.total_ordered_qty }}</td>
-                <td>{{ detail.area or '—' }}</td>
                 <td>{{ "%.2f"|format(detail.total_cbm) }}</td>
                 <td><span class="badge bg-secondary">{{ detail.status }}</span></td>
                 <td>
@@ -77,15 +104,47 @@
                 <td>
                   {% if detail.status == "Delivered" %}
                   <div class="btn-group btn-group-sm" role="group">
-                    <button class="btn btn-sm btn-success" onclick="recordArrival('{{ detail.document_number }}', {{ schedule.id }}, {{ trip.trip_number }}, this)" {% if detail.arrive %}disabled{% endif %}>In</button>
-                    <button class="btn btn-sm btn-primary" onclick="recordDeparture('{{ detail.document_number }}', {{ schedule.id }}, {{ trip.trip_number }}, this)" {% if detail.departure %}disabled{% endif %}>Out</button>
-                    <button class="btn btn-sm btn-danger" onclick="cancelTripDetail('{{ detail.document_number }}', {{ schedule.id }}, {{ trip.trip_number }})">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-success btn-record-arrival" {% if detail.arrive %}disabled{% endif %}>In</button>
+                    <button type="button" class="btn btn-sm btn-primary btn-record-departure" {% if detail.departure %}disabled{% endif %}>Out</button>
+                    <button type="button" class="btn btn-sm btn-danger btn-cancel-trip">Cancel</button>
                   </div>
                   {% elif detail.status == "Not Scheduled" %}
                   <span class="badge bg-secondary">Cancelled</span>
                   {% else %}
                   <span class="badge bg-secondary">{{ detail.status }}</span>
                   {% endif %}
+                </td>
+                <td>
+                  <select class="form-select form-select-sm" id="remarks_{{ detail.id }}" name="remarks">
+                    <option value="">Select remark...</option>
+                    <option value="3PL CONCERN" {% if detail.reason == '3PL CONCERN' %}selected{% endif %}>3PL CONCERN</option>
+                    <option value="BARCODE CONCERN" {% if detail.reason == 'BARCODE CONCERN' %}selected{% endif %}>BARCODE CONCERN</option>
+                    <option value="BRANCH'S DELIVERY CUT-OFF TIME" {% if detail.reason == 'BRANCH\'S DELIVERY CUT-OFF TIME' %}selected{% endif %}>BRANCH'S DELIVERY CUT-OFF TIME</option>
+                    <option value="CANCELLED ORDER" {% if detail.reason == 'CANCELLED ORDER' %}selected{% endif %}>CANCELLED ORDER</option>
+                    <option value="CONGESTED WAREHOUSE" {% if detail.reason == 'CONGESTED WAREHOUSE' %}selected{% endif %}>CONGESTED WAREHOUSE</option>
+                    <option value="DELAYED RECEIVING OF DELIVERY" {% if detail.reason == 'DELAYED RECEIVING OF DELIVERY' %}selected{% endif %}>DELAYED RECEIVING OF DELIVERY</option>
+                    <option value="DELAYED RELEASING OF DOCUMENTS" {% if detail.reason == 'DELAYED RELEASING OF DOCUMENTS' %}selected{% endif %}>DELAYED RELEASING OF DOCUMENTS</option>
+                    <option value="DOUBLE ORDER" {% if detail.reason == 'DOUBLE ORDER' %}selected{% endif %}>DOUBLE ORDER</option>
+                    <option value="FIESTA" {% if detail.reason == 'FIESTA' %}selected{% endif %}>FIESTA</option>
+                    <option value="INCOMPLETE ACCESSORIES" {% if detail.reason == 'INCOMPLETE ACCESSORIES' %}selected{% endif %}>INCOMPLETE ACCESSORIES</option>
+                    <option value="NO DEFECTIVE UNIT TAG / POR" {% if detail.reason == 'NO DEFECTIVE UNIT TAG / POR' %}selected{% endif %}>NO DEFECTIVE UNIT TAG / POR</option>
+                    <option value="NO PERMIT" {% if detail.reason == 'NO PERMIT' %}selected{% endif %}>NO PERMIT</option>
+                    <option value="NO PS / RECEIVING PERSONNEL" {% if detail.reason == 'NO PS / RECEIVING PERSONNEL' %}selected{% endif %}>NO PS / RECEIVING PERSONNEL</option>
+                    <option value="NO SKU" {% if detail.reason == 'NO SKU' %}selected{% endif %}>NO SKU</option>
+                    <option value="NOT DISPATCHED BY WAREHOUSE" {% if detail.reason == 'NOT DISPATCHED BY WAREHOUSE' %}selected{% endif %}>NOT DISPATCHED BY WAREHOUSE</option>
+                    <option value="OVERSTOCK" {% if detail.reason == 'OVERSTOCK' %}selected{% endif %}>OVERSTOCK</option>
+                    <option value="P.O. CONCERN" {% if detail.reason == 'P.O. CONCERN' %}selected{% endif %}>P.O. CONCERN</option>
+                    <option value="RALLY" {% if detail.reason == 'RALLY' %}selected{% endif %}>RALLY</option>
+                    <option value="UNIT CONCERN" {% if detail.reason == 'UNIT CONCERN' %}selected{% endif %}>UNIT CONCERN</option>
+                    <option value="UNIT NOT FOUND" {% if detail.reason == 'UNIT NOT FOUND' %}selected{% endif %}>UNIT NOT FOUND</option>
+                    <option value="UNIT NOT READY" {% if detail.reason == 'UNIT NOT READY' %}selected{% endif %}>UNIT NOT READY</option>
+                    <option value="UNIT WITHOUT BOX" {% if detail.reason == 'UNIT WITHOUT BOX' %}selected{% endif %}>UNIT WITHOUT BOX</option>
+                    <option value="VEHICLE CONCERN / BREAKDOWN" {% if detail.reason == 'VEHICLE CONCERN / BREAKDOWN' %}selected{% endif %}>VEHICLE CONCERN / BREAKDOWN</option>
+                    <option value="WEATHER CONDITION" {% if detail.reason == 'WEATHER CONDITION' %}selected{% endif %}>WEATHER CONDITION</option>
+                    <option value="WITH BRANCH STR" {% if detail.reason == 'WITH BRANCH STR' %}selected{% endif %}>WITH BRANCH STR</option>
+                    <option value="WRONG MODEL" {% if detail.reason == 'WRONG MODEL' %}selected{% endif %}>WRONG MODEL</option>
+                    <option value="WRONG SERIAL" {% if detail.reason == 'WRONG SERIAL' %}selected{% endif %}>WRONG SERIAL</option>
+                  </select>
                 </td>
                 <td>
                   <input type="text" class="form-control form-control-sm" id="reason_{{ detail.id }}" placeholder="Reason (optional)" value="{{ detail.reason or '' }}">
@@ -105,7 +164,11 @@
 {% endfor %}
 
 {% if not schedules %}
+{% if current_user.position == 'admin' %}
 <div class="alert alert-info">No schedules created yet.</div>
+{% else %}
+<div class="alert alert-info">No schedules assigned to you yet. Please contact the administrator if you believe this is an error.</div>
+{% endif %}
 {% endif %}
 
 <!-- Cancel Trip Detail Modal -->
@@ -189,11 +252,11 @@ function cancelTripDetail(documentNumber, scheduleId, tripNumber) {
 
 <script>
 // Global variables to store trip detail information
-let currentDocumentNumber, currentScheduleId, currentTripNumber;
+let currentBranchName, currentScheduleId, currentTripNumber;
 
-function cancelTripDetail(documentNumber, scheduleId, tripNumber) {
+function cancelTripDetail(branchName, scheduleId, tripNumber) {
   // Store the trip detail information in global variables
-  currentDocumentNumber = documentNumber;
+  currentBranchName = branchName;
   currentScheduleId = scheduleId;
   currentTripNumber = tripNumber;
 
@@ -204,6 +267,93 @@ function cancelTripDetail(documentNumber, scheduleId, tripNumber) {
 
 // Handle the confirm cancel button click
 document.addEventListener('DOMContentLoaded', function() {
+  // Event delegation for Cancel buttons
+  document.querySelectorAll('.btn-cancel-trip').forEach(button => {
+    button.addEventListener('click', function() {
+      const row = this.closest('tr');
+      const branchName = row.getAttribute('data-branch-name');
+      const tripNumber = parseInt(row.getAttribute('data-trip-number'));
+      const scheduleId = parseInt(row.getAttribute('data-schedule-id'));
+      cancelTripDetail(branchName, scheduleId, tripNumber);
+    });
+  });
+
+  // Event delegation for In buttons
+  document.querySelectorAll('.btn-record-arrival').forEach(button => {
+    button.addEventListener('click', function() {
+      const row = this.closest('tr');
+      const branchName = row.getAttribute('data-branch-name');
+      const tripNumber = parseInt(row.getAttribute('data-trip-number'));
+      const scheduleId = parseInt(row.getAttribute('data-schedule-id'));
+      const reasonInput = row.querySelector('input[id^="reason_"]');
+      const reason = reasonInput ? reasonInput.value : '';
+
+      // Send the arrival request
+      fetch('/record_arrival', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          branch_name_v2: branchName,
+          schedule_id: scheduleId,
+          trip_number: tripNumber,
+          reason: reason
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          location.reload();
+        } else {
+          alert('Error recording arrival: ' + data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while recording arrival');
+      });
+    });
+  });
+
+  // Event delegation for Out buttons
+  document.querySelectorAll('.btn-record-departure').forEach(button => {
+    button.addEventListener('click', function() {
+      const row = this.closest('tr');
+      const branchName = row.getAttribute('data-branch-name');
+      const tripNumber = parseInt(row.getAttribute('data-trip-number'));
+      const scheduleId = parseInt(row.getAttribute('data-schedule-id'));
+      const reasonInput = row.querySelector('input[id^="reason_"]');
+      const reason = reasonInput ? reasonInput.value : '';
+
+      // Send the departure request
+      fetch('/record_departure', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          branch_name_v2: branchName,
+          schedule_id: scheduleId,
+          trip_number: tripNumber,
+          reason: reason
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          location.reload();
+        } else {
+          alert('Error recording departure: ' + data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while recording departure');
+      });
+    });
+  });
+
   document.getElementById('confirmCancel').addEventListener('click', function() {
     const cancelReason = document.getElementById('cancelReason').value;
     const cancelDepartment = document.getElementById('cancelDepartment').value;
@@ -225,7 +375,7 @@ document.addEventListener('DOMContentLoaded', function() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        document_number: currentDocumentNumber,
+        branch_name_v2: currentBranchName,
         schedule_id: currentScheduleId,
         trip_number: currentTripNumber,
         cancel_reason: cancelReason,
@@ -253,71 +403,74 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 
-// Function to record arrival (In button)
-function recordArrival(documentNumber, scheduleId, tripNumber, button) {
-  // Find the reason input field for this row
-  const row = button.closest('tr');
-  const reasonInput = row.querySelector('input[id^="reason_"]');
-  const reason = reasonInput ? reasonInput.value : '';
+// Function to record odometer reading
+function recordOdo(plateNumber, status, tripId) {
+  // Get the correct input field based on status
+  let inputId;
+  if (status === 'start odo') {
+    inputId = 'start_odo_' + tripId;
+  } else if (status === 'refill odo') {
+    inputId = 'refill_odo_' + tripId;
+  } else if (status === 'end odo') {
+    inputId = 'end_odo_' + tripId;
+  }
 
-  // Send the arrival request
-  fetch('/record_arrival', {
+  const input = document.getElementById(inputId);
+  const odometerReading = input ? input.value : '';
+
+  if (!odometerReading || isNaN(odometerReading)) {
+    alert('Please enter a valid odometer reading');
+    return;
+  }
+
+  // Prepare the request data
+  let requestData = {
+    plate_number: plateNumber,
+    odometer_reading: odometerReading,
+    status: status
+  };
+
+  // Add litters and amount for refill odo
+  if (status === 'refill odo') {
+    const littersInput = document.getElementById('refill_litters_' + tripId);
+    const amountInput = document.getElementById('refill_amount_' + tripId);
+    const litters = littersInput ? littersInput.value : '';
+    const amount = amountInput ? amountInput.value : '';
+
+    if (litters && !isNaN(litters)) {
+      requestData.litters = parseFloat(litters);
+    }
+    if (amount && !isNaN(amount)) {
+      requestData.amount = parseFloat(amount);
+    }
+  }
+
+  // Send the odometer reading request
+  fetch('/record_odo', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      document_number: documentNumber,
-      schedule_id: scheduleId,
-      trip_number: tripNumber,
-      reason: reason
-    })
+    body: JSON.stringify(requestData)
   })
   .then(response => response.json())
   .then(data => {
     if (data.success) {
-      location.reload();
+      alert(data.message);
+      if (input) input.value = ''; // Clear the input field
+      if (status === 'refill odo') {
+        const littersInput = document.getElementById('refill_litters_' + tripId);
+        const amountInput = document.getElementById('refill_amount_' + tripId);
+        if (littersInput) littersInput.value = '';
+        if (amountInput) amountInput.value = '';
+      }
     } else {
-      alert('Error recording arrival: ' + data.message);
+      alert('Error recording odometer: ' + data.message);
     }
   })
   .catch(error => {
     console.error('Error:', error);
-    alert('An error occurred while recording arrival');
-  });
-}
-
-// Function to record departure (Out button)
-function recordDeparture(documentNumber, scheduleId, tripNumber, button) {
-  // Find the reason input field for this row
-  const row = button.closest('tr');
-  const reasonInput = row.querySelector('input[id^="reason_"]');
-  const reason = reasonInput ? reasonInput.value : '';
-
-  // Send the departure request
-  fetch('/record_departure', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      document_number: documentNumber,
-      schedule_id: scheduleId,
-      trip_number: tripNumber,
-      reason: reason
-    })
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      location.reload();
-    } else {
-      alert('Error recording departure: ' + data.message);
-    }
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    alert('An error occurred while recording departure');
+    alert('An error occurred while recording odometer');
   });
 }
 </script>
