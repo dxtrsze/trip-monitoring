@@ -6,7 +6,7 @@ from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import pandas as pd
-from models import db, Vehicle, Manpower, Data, Schedule, Trip, TripDetail, Cluster, User, Odo, DailyVehicleCount
+from models import db, Vehicle, Manpower, Data, Schedule, Trip, TripDetail, Cluster, User, Odo, DailyVehicleCount, Backload
 from sqlalchemy import func
 from functools import wraps
 
@@ -1246,6 +1246,7 @@ def cancel_trip_detail():
         trip_detail.status = "Cancelled"
         trip_detail.cancel_reason = cancel_reason
         trip_detail.cause_department = cancel_department
+        trip_detail.total_delivered_qty = 0
 
         # Also update the status of all associated Data records
         if trip_detail.data_ids:
@@ -1437,6 +1438,136 @@ def reports():
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('view_schedule'))
     return render_template('reports.html')
+
+# Scheduled Trips Report Route
+@app.route('/scheduled_trips_report')
+@login_required
+def scheduled_trips_report():
+    """Get scheduled trips with trip details and assigned drivers/assistants"""
+    if current_user.position != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    if not start_date_str or not end_date_str:
+        return jsonify([])
+
+    try:
+        from datetime import timedelta
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() + timedelta(days=1)
+
+        # Query schedules within date range
+        schedules = Schedule.query.filter(
+            Schedule.delivery_schedule >= start_date,
+            Schedule.delivery_schedule < end_date
+        ).order_by(Schedule.delivery_schedule).all()
+
+        result = []
+        for schedule in schedules:
+            for trip in schedule.trips:
+                for detail in trip.details:
+                    # Get all drivers for this trip
+                    drivers = ', '.join([driver.name for driver in trip.drivers]) if trip.drivers else 'N/A'
+
+                    # Get all assistants for this trip
+                    assistants = ', '.join([assistant.name for assistant in trip.assistants]) if trip.assistants else 'N/A'
+
+                    result.append({
+                        'delivery_schedule': schedule.delivery_schedule.strftime('%Y-%m-%d'),
+                        'trip_number': trip.trip_number,
+                        'plate_number': trip.vehicle.plate_number if trip.vehicle else 'N/A',
+                        'drivers': drivers,
+                        'assistants': assistants,
+                        'branch_name_v2': detail.branch_name_v2,
+                        'total_ordered_qty': detail.total_ordered_qty or 0,
+                        'total_delivered_qty': detail.total_delivered_qty or 0,
+                        'status': detail.status or 'Delivered'
+                    })
+
+        return jsonify(result)
+
+    except ValueError as e:
+        return jsonify({'error': f'Invalid date format: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Error fetching data: {str(e)}'}), 500
+
+
+@app.route('/export_scheduled_trips_report')
+@login_required
+def export_scheduled_trips_report():
+    """Export scheduled trips report to CSV"""
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    if not start_date_str or not end_date_str:
+        return "Start date and end date are required", 400
+
+    try:
+        from datetime import timedelta
+        import io
+        import csv
+
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() + timedelta(days=1)
+
+        # Query schedules within date range
+        schedules = Schedule.query.filter(
+            Schedule.delivery_schedule >= start_date,
+            Schedule.delivery_schedule < end_date
+        ).order_by(Schedule.delivery_schedule).all()
+
+        # Create CSV data
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Write headers
+        writer.writerow([
+            'Date', 'Trip #', 'Vehicle', 'Driver(s)', 'Assistant(s)',
+            'Branch', 'Ordered Qty', 'Delivered Qty', 'Status'
+        ])
+
+        # Write data rows
+        for schedule in schedules:
+            for trip in schedule.trips:
+                for detail in trip.details:
+                    # Get all drivers for this trip
+                    drivers = ', '.join([driver.name for driver in trip.drivers]) if trip.drivers else 'N/A'
+
+                    # Get all assistants for this trip
+                    assistants = ', '.join([assistant.name for assistant in trip.assistants]) if trip.assistants else 'N/A'
+
+                    writer.writerow([
+                        schedule.delivery_schedule.strftime('%Y-%m-%d'),
+                        trip.trip_number,
+                        trip.vehicle.plate_number if trip.vehicle else 'N/A',
+                        drivers,
+                        assistants,
+                        detail.branch_name_v2,
+                        detail.total_ordered_qty or 0,
+                        detail.total_delivered_qty or 0,
+                        detail.status or 'Delivered'
+                    ])
+
+        output.seek(0)
+
+        # Return as downloadable CSV file
+        filename = f"scheduled_trips_report_{start_date_str}_to_{end_date_str}.csv"
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+
+    except ValueError as e:
+        return f"Invalid date format: {str(e)}", 400
+    except Exception as e:
+        return f"Error exporting report: {str(e)}", 500
 
 # Report generation routes
 @app.route('/generate_report')
@@ -2275,8 +2406,8 @@ def difot_data():
         for schedule in schedules:
             for trip in schedule.trips:
                 for detail in trip.details:
-                    # Only show delivered items
-                    if detail.status == 'Delivered':
+                    # Show delivered and cancelled items
+                    if detail.status in ('Delivered', 'Cancelled'):
                         # Calculate On Time: scheduled_date - original_due_date
                         days_late = None
                         if detail.original_due_date:
@@ -2347,8 +2478,8 @@ def export_difot():
         for schedule in schedules:
             for trip in schedule.trips:
                 for detail in trip.details:
-                    # Only show delivered items
-                    if detail.status == 'Delivered':
+                    # Show delivered and cancelled items
+                    if detail.status in ('Delivered', 'Cancelled'):
                         # Calculate On Time
                         days_late = None
                         on_time_status = 'N/A'
@@ -2394,6 +2525,244 @@ def export_difot():
         return f"Invalid date format: {str(e)}", 400
     except Exception as e:
         return f"Error exporting DIFOT data: {str(e)}", 500
+
+# Backload Routes
+@app.route('/backload')
+@login_required
+def backload():
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+    return render_template('backload.html')
+
+
+@app.route('/search_trip_details')
+@login_required
+def search_trip_details():
+    """Search trip details by document number"""
+    if current_user.position != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+
+    document_number = request.args.get('document_number', '').strip()
+
+    if not document_number:
+        return jsonify({'error': 'Document number is required'}), 400
+
+    try:
+        # Search for trip details with the given document number
+        trip_details = db.session.query(TripDetail, Schedule).join(
+            Trip, TripDetail.trip_id == Trip.id
+        ).join(
+            Schedule, Trip.schedule_id == Schedule.id
+        ).filter(
+            TripDetail.document_number == document_number
+        ).order_by(Schedule.delivery_schedule.desc()).all()
+
+        result = []
+        for detail, schedule in trip_details:
+            result.append({
+                'id': detail.id,
+                'scheduled_date': schedule.delivery_schedule.strftime('%Y-%m-%d'),
+                'document_number': detail.document_number,
+                'branch_name_v2': detail.branch_name_v2,
+                'total_ordered_qty': detail.total_ordered_qty or 0,
+                'total_delivered_qty': detail.total_delivered_qty or 0,
+                'backload_qty': detail.backload_qty or 0
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': f'Error searching: {str(e)}'}), 500
+
+
+@app.route('/search_data_records')
+@login_required
+def search_data_records():
+    """Search data records by document number"""
+    if current_user.position != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+
+    document_number = request.args.get('document_number')
+
+    if not document_number:
+        return jsonify([])
+
+    try:
+        # Query data records matching the document number
+        data_records = Data.query.filter(
+            Data.document_number == document_number
+        ).order_by(Data.item_number).all()
+
+        result = []
+        for record in data_records:
+            result.append({
+                'id': record.id,
+                'document_number': record.document_number,
+                'item_number': record.item_number,
+                'ordered_qty': record.ordered_qty or 0,
+                'delivered_qty': record.delivered_qty or 0,
+                'branch_name': record.branch_name,
+                'branch_name_v2': record.branch_name_v2,
+                'original_due_date': record.original_due_date.strftime('%Y-%m-%d') if record.original_due_date else None
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': f'Error searching data records: {str(e)}'}), 500
+
+
+@app.route('/search_backload')
+@login_required
+def search_backload():
+    """Search backload records by document number"""
+    if current_user.position != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+
+    document_number = request.args.get('document_number')
+
+    if not document_number:
+        return jsonify([])
+
+    try:
+        # Query backload records matching the document number
+        backloads = Backload.query.filter(
+            Backload.document_number == document_number
+        ).order_by(Backload.created_at.desc()).all()
+
+        result = []
+        for backload in backloads:
+            result.append({
+                'id': backload.id,
+                'created_at': backload.created_at.strftime('%Y-%m-%d %H:%M:%S') if backload.created_at else None,
+                'document_number': backload.document_number,
+                'item_number': backload.item_number,
+                'ordered_qty': backload.ordered_qty or 0,
+                'backload_qty': backload.backload_qty or 0,
+                'branch_name': backload.branch_name,
+                'branch_name_v2': backload.branch_name_v2
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': f'Error searching backload: {str(e)}'}), 500
+
+
+@app.route('/get_data_record/<int:id>')
+@login_required
+def get_data_record(id):
+    """Get a single data record by ID"""
+    if current_user.position != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+
+    try:
+        record = Data.query.get_or_404(id)
+        return jsonify({
+            'id': record.id,
+            'document_number': record.document_number,
+            'item_number': record.item_number,
+            'ordered_qty': record.ordered_qty,
+            'delivered_qty': record.delivered_qty
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 404
+
+
+@app.route('/apply_data_backload', methods=['POST'])
+@login_required
+def apply_data_backload():
+    """Apply backload to a data record (creates a backload record and updates data and trip_detail)"""
+    if current_user.position != 'admin':
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+
+    try:
+        data = request.get_json()
+        record_id = data.get('record_id')
+        backload_qty = data.get('backload_qty')
+
+        if not record_id:
+            return jsonify({'success': False, 'message': 'Record ID is required'}), 400
+
+        if backload_qty is None or backload_qty <= 0:
+            return jsonify({'success': False, 'message': 'Backload quantity must be greater than zero'}), 400
+
+        # Get the data record
+        data_record = Data.query.get_or_404(record_id)
+
+        # Validate backload quantity
+        if backload_qty > data_record.delivered_qty:
+            return jsonify({'success': False, 'message': 'Backload quantity cannot exceed delivered quantity'}), 400
+
+        # Calculate new values for data record
+        new_delivered_qty = data_record.delivered_qty - backload_qty
+        new_remaining_open_qty = data_record.ordered_qty - new_delivered_qty
+
+        # Update data record
+        data_record.delivered_qty = new_delivered_qty
+        data_record.remaining_open_qty = new_remaining_open_qty
+
+        # Create backload record with updated values
+        backload = Backload(
+            type=data_record.type,
+            posting_date=data_record.posting_date,
+            document_number=data_record.document_number,
+            item_number=data_record.item_number,
+            ordered_qty=data_record.ordered_qty,
+            delivered_qty=new_delivered_qty,
+            remaining_open_qty=new_remaining_open_qty,
+            from_whse_code=data_record.from_whse_code,
+            to_whse=data_record.to_whse,
+            remarks=data_record.remarks,
+            special_instructions=data_record.special_instructions,
+            branch_name=data_record.branch_name,
+            branch_name_v2=data_record.branch_name_v2,
+            document_status=data_record.document_status,
+            original_due_date=data_record.original_due_date,
+            due_date=data_record.due_date,
+            user_code=data_record.user_code,
+            po_number=data_record.po_number,
+            isms_so_number=data_record.isms_so_number,
+            cbm=data_record.cbm,
+            total_cbm=data_record.total_cbm,
+            customer_vendor_code=data_record.customer_vendor_code,
+            customer_vendor_name=data_record.customer_vendor_name,
+            status=data_record.status,
+            delivery_type=data_record.delivery_type,
+            backload_qty=backload_qty
+        )
+        db.session.add(backload)
+
+        # Find and update the associated trip_detail
+        # Search for trip_detail that contains this data_record in its data_ids
+        trip_details = TripDetail.query.all()
+        updated_trip_detail = None
+
+        for td in trip_details:
+            if td.data_ids:
+                data_ids = td.data_ids.split(',')
+                if str(record_id) in data_ids:
+                    # This is the trip_detail containing our data_record
+                    td.total_delivered_qty = (td.total_delivered_qty or 0) - backload_qty
+                    td.backload_qty = (td.backload_qty or 0) + backload_qty
+                    updated_trip_detail = td
+                    break
+
+        db.session.commit()
+
+        message = f'Backload applied successfully. Backloaded quantity: {backload_qty}'
+        if updated_trip_detail:
+            message += f'\nUpdated trip_detail total_delivered_qty: {updated_trip_detail.total_delivered_qty}, backload_qty: {updated_trip_detail.backload_qty}'
+
+        return jsonify({
+            'success': True,
+            'message': message
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Error creating backload record: {str(e)}'}), 500
 
 # Daily Vehicle Count Routes
 @app.route('/daily_vehicle_counts')

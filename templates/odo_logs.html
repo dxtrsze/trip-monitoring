@@ -58,6 +58,9 @@
             <th>Vehicle</th>
             <th>Status</th>
             <th>Reading (km)</th>
+            <th>Litters</th>
+            <th>Amount</th>
+            <th>Price/Litter</th>
             <th>Recorded By</th>
           </tr>
         </thead>
@@ -79,6 +82,27 @@
             </td>
             <td>
               <strong>{{ "%.1f"|format(log.odometer_reading) }}</strong>
+            </td>
+            <td>
+              {% if log.litters is not none %}
+                <span>{{ "%.2f"|format(log.litters) }}</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if log.amount is not none %}
+                <span>₱{{ "%.2f"|format(log.amount) }}</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if log.price_per_litter is not none %}
+                <span>₱{{ "%.2f"|format(log.price_per_litter) }}</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
             </td>
             <td>{{ log.created_by }}</td>
           </tr>

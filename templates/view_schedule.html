@@ -47,7 +47,7 @@
             <label class="form-label small mb-1">Start Odo</label>
             <div class="input-group input-group-sm">
               <input type="number" class="form-control" id="start_odo_{{ trip.id }}" placeholder="0" step="0.1">
-              <button class="btn btn-outline-success" type="button" onclick="recordOdo('{{ trip.vehicle.plate_number }}', 'start odo', {{ trip.id }})">Submit</button>
+              <button class="btn btn-outline-success" type="button" data-plate="{{ trip.vehicle.plate_number }}" data-trip="{{ trip.id }}" onclick="recordOdo(this.dataset.plate, 'start odo', this.dataset.trip)">Submit</button>
             </div>
           </div>
           <div class="col-md-4">
@@ -56,14 +56,14 @@
               <input type="number" class="form-control" id="refill_odo_{{ trip.id }}" placeholder="Odo" step="0.1">
               <input type="number" class="form-control" id="refill_litters_{{ trip.id }}" placeholder="Liters" step="0.1">
               <input type="number" class="form-control" id="refill_amount_{{ trip.id }}" placeholder="Amount" step="0.01">
-              <button class="btn btn-outline-primary" type="button" onclick="recordOdo('{{ trip.vehicle.plate_number }}', 'refill odo', {{ trip.id }})">Submit</button>
+              <button class="btn btn-outline-primary" type="button" data-plate="{{ trip.vehicle.plate_number }}" data-trip="{{ trip.id }}" onclick="recordOdo(this.dataset.plate, 'refill odo', this.dataset.trip)">Submit</button>
             </div>
           </div>
           <div class="col-md-4">
             <label class="form-label small mb-1">End Odo</label>
             <div class="input-group input-group-sm">
               <input type="number" class="form-control" id="end_odo_{{ trip.id }}" placeholder="0" step="0.1">
-              <button class="btn btn-outline-danger" type="button" onclick="recordOdo('{{ trip.vehicle.plate_number }}', 'end odo', {{ trip.id }})">Submit</button>
+              <button class="btn btn-outline-danger" type="button" data-plate="{{ trip.vehicle.plate_number }}" data-trip="{{ trip.id }}" onclick="recordOdo(this.dataset.plate, 'end odo', this.dataset.trip)">Submit</button>
             </div>
           </div>
         </div>

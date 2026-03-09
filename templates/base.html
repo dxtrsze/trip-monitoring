@@ -37,6 +37,8 @@
                             <li><a class="dropdown-item" href="{{ url_for('view_schedule') }}">View Schedules</a></li>
                             {% if current_user.position == 'admin' %}
                             <li><a class="dropdown-item" href="{{ url_for('add_schedule') }}">Add Schedule</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('backload') }}">Backload Management</a></li>
                             {% endif %}
                         </ul>
                     </li>
@@ -50,15 +52,12 @@
                             <li><a class="dropdown-item" href="{{ url_for('manage_manpower') }}">Manpower</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('manage_clusters') }}">Clusters</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('manage_users') }}">Users</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('daily_vehicle_counts') }}">Daily Vehicle Counts</a></li>
                         </ul>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('reports') }}">Reports</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('daily_vehicle_counts') }}">
-                            <i class="bi bi-truck"></i> Daily Vehicle Counts
-                        </a>
                     </li>
                     {% endif %}
                 </ul>

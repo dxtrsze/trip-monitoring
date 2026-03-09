@@ -106,6 +106,7 @@ class TripDetail(db.Model):
     total_cbm = db.Column(db.Float, nullable=False, default=0.0)  # Sum of all CBM for this document
     total_ordered_qty = db.Column(db.Integer, nullable=False, default=0)  # Sum of ordered quantities
     total_delivered_qty = db.Column(db.Integer, nullable=False, default=0)  # Sum of delivered quantities
+    backload_qty = db.Column(db.Integer, nullable=True, default=0)  # Quantity that was backloaded/returned
 
     trip_id = db.Column(db.Integer, db.ForeignKey('trip.id'), nullable=False)
     trip = db.relationship('Trip', backref=db.backref('details', lazy=True))
@@ -186,4 +187,38 @@ class DailyVehicleCount(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
 
     def __repr__(self):
-        return f'<DailyVehicleCount {self.date} - {self.qty} vehicles>' 
+        return f'<DailyVehicleCount {self.date} - {self.qty} vehicles>'
+
+class Backload(db.Model):
+    __tablename__ = 'backload'
+    id = db.Column(db.Integer, primary_key=True)
+    type = db.Column(db.String(50), nullable=False)  # "ITR", "SO"
+    posting_date = db.Column(db.Date, nullable=False)
+    document_number = db.Column(db.String(100), nullable=False)
+    item_number = db.Column(db.String(100), nullable=False)
+    ordered_qty = db.Column(db.Integer, nullable=False)
+    delivered_qty = db.Column(db.Float, nullable=False)
+    remaining_open_qty = db.Column(db.Float)
+    from_whse_code = db.Column(db.String(50))
+    to_whse = db.Column(db.String(50))
+    remarks = db.Column(db.Text)
+    special_instructions = db.Column(db.Text)
+    branch_name = db.Column(db.String(100))
+    branch_name_v2 = db.Column(db.String(100))
+    document_status = db.Column(db.String(50))  # "O", "C"
+    original_due_date = db.Column(db.Date)
+    due_date = db.Column(db.Date)
+    user_code = db.Column(db.String(50))
+    po_number = db.Column(db.String(100))
+    isms_so_number = db.Column(db.String(100))
+    cbm = db.Column(db.Float)
+    total_cbm = db.Column(db.Float, default=0.0)
+    customer_vendor_code = db.Column(db.String(50))
+    customer_vendor_name = db.Column(db.String(100))
+    status = db.Column(db.String(50))  # "Not Scheduled", "Scheduled", "Cancelled"
+    delivery_type = db.Column(db.String(100), nullable=True)
+    backload_qty = db.Column(db.Integer, nullable=False, default=0)  # Additional column for backload quantity
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)  # Track when backload was created
+
+    def __repr__(self):
+        return f'<Backload {self.document_number} - {self.item_number} - Qty: {self.backload_qty}>' 
