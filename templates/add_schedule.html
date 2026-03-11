@@ -9,11 +9,16 @@
   <div class="card mb-4">
     <div class="card-body">
       <div class="row">
-        <div class="col-md-6 mb-3">
-          <label class="form-label">Delivery Date *</label>
-          <input type="date" class="form-control" name="delivery_schedule" id="deliveryDate" required>
+        <div class="col-md-4 mb-3">
+          <label class="form-label">From Date *</label>
+          <input type="date" class="form-control" name="delivery_schedule_from" id="deliveryDateFrom" required>
         </div>
-        <div class="col-md-6 mb-3">
+        <div class="col-md-4 mb-3">
+          <label class="form-label">To Date</label>
+          <input type="date" class="form-control" name="delivery_schedule_to" id="deliveryDateTo">
+          <div class="form-text">Leave empty for single date</div>
+        </div>
+        <div class="col-md-4 mb-3">
           <label class="form-label">Filter by Area</label>
           <select class="form-select" id="areaFilter">
             <option value="">All Areas</option>
@@ -36,7 +41,10 @@
       <button type="submit" class="btn btn-success">Save Schedule</button>
     </div>
     <div class="card mb-4">
-      <div class="card-header">Available Shipments (<span id="shipmentCount">0</span> <span id="totalCountDisplay"></span>)</div>
+      <div class="card-header">
+        Available Shipments (<span id="shipmentCount">0</span> <span id="totalCountDisplay"></span>)
+        <span id="dateRangeDisplay" class="badge bg-info ms-2" style="display:none;"></span>
+      </div>
       <div class="card-body">
         <div id="shipmentsList"></div>
       </div>
@@ -86,9 +94,11 @@ function filterShipments() {
 }
 
 document.getElementById('loadBtn').addEventListener('click', function() {
-  const date = document.getElementById('deliveryDate').value;
-  if (!date) {
-    alert('Please select a delivery date');
+  const fromDate = document.getElementById('deliveryDateFrom').value;
+  const toDate = document.getElementById('deliveryDateTo').value;
+
+  if (!fromDate) {
+    alert('Please select a from date');
     return;
   }
 
@@ -97,18 +107,47 @@ document.getElementById('loadBtn').addEventListener('click', function() {
   tripCounter = 0;
   document.getElementById('tripCount').value = '0';
 
-  fetch(`/api/not_scheduled?due_date=${date}`)
+  // Build API URL with date range parameters
+  let apiUrl = `/api/not_scheduled?due_date_from=${fromDate}`;
+  if (toDate) {
+    apiUrl += `&due_date_to=${toDate}`;
+  }
+
+  fetch(apiUrl)
     .then(res => res.json())
     .then(data => {
       allShipments = data;
       // Apply area filter if one is selected
       filterShipments();
       document.getElementById('shipmentsSection').style.display = 'block';
+
+      // Show date range badge
+      const dateRangeDisplay = document.getElementById('dateRangeDisplay');
+      if (toDate) {
+        dateRangeDisplay.textContent = `${fromDate} to ${toDate}`;
+        dateRangeDisplay.style.display = 'inline-block';
+      } else {
+        dateRangeDisplay.textContent = fromDate;
+        dateRangeDisplay.style.display = 'inline-block';
+      }
     });
 });
 
 // Also validate vehicles when delivery date changes
-document.getElementById('deliveryDate').addEventListener('change', function() {
+document.getElementById('deliveryDateFrom').addEventListener('change', function() {
+  // Re-check all selected vehicles against the new date
+  const allVehicleSelects = document.querySelectorAll('.vehicle-select');
+  allVehicleSelects.forEach(select => {
+    const tripCard = select.closest('.trip-card');
+    const tripId = parseInt(tripCard.getAttribute('data-trip'));
+
+    if (select.value) {
+      checkVehicleSchedule(tripId, select.value);
+    }
+  });
+});
+
+document.getElementById('deliveryDateTo').addEventListener('change', function() {
   // Re-check all selected vehicles against the new date
   const allVehicleSelects = document.querySelectorAll('.vehicle-select');
   allVehicleSelects.forEach(select => {
@@ -457,7 +496,7 @@ function handleVehicleChange(changedTripId) {
 
 // Check if vehicle is already scheduled for the selected date
 function checkVehicleSchedule(tripId, vehicleId) {
-  const deliveryDate = document.getElementById('deliveryDate').value;
+  const deliveryDate = document.getElementById('deliveryDateFrom').value;
   if (!deliveryDate || !vehicleId) return;
 
   fetch(`/api/vehicle_schedule_status?vehicle_id=${vehicleId}&date=${deliveryDate}`)

@@ -1463,16 +1463,37 @@ def add_schedule():
 
 @app.route('/api/not_scheduled')
 def api_not_scheduled():
-    due_date_str = request.args.get('due_date')
-    if not due_date_str:
-        return jsonify([])
+    # Support both old single date parameter and new date range parameters
+    due_date_str = request.args.get('due_date')  # Backward compatibility
+    due_date_from_str = request.args.get('due_date_from')
+    due_date_to_str = request.args.get('due_date_to')
 
-    due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
-    # Subquery: Get all "Not Scheduled" data with due_date == selected date
-    subq = Data.query.filter(
-        Data.status == 'Not Scheduled',
-        Data.due_date == due_date
-    ).subquery()
+    # Use new parameters if provided, otherwise fall back to old parameter
+    if due_date_from_str:
+        from_date = datetime.strptime(due_date_from_str, '%Y-%m-%d').date()
+        if due_date_to_str:
+            # Date range query
+            to_date = datetime.strptime(due_date_to_str, '%Y-%m-%d').date()
+            subq = Data.query.filter(
+                Data.status == 'Not Scheduled',
+                Data.due_date >= from_date,
+                Data.due_date <= to_date
+            ).subquery()
+        else:
+            # Single date query (using from_date)
+            subq = Data.query.filter(
+                Data.status == 'Not Scheduled',
+                Data.due_date == from_date
+            ).subquery()
+    elif due_date_str:
+        # Backward compatibility with old parameter
+        due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+        subq = Data.query.filter(
+            Data.status == 'Not Scheduled',
+            Data.due_date == due_date
+        ).subquery()
+    else:
+        return jsonify([])
 
     # Group by document_number and aggregate
     results = db.session.query(
