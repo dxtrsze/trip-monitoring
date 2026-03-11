@@ -1,6 +1,8 @@
 import os
 import csv
 import io
+import random
+import string
 from dateutil import parser as date_parser
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
@@ -948,6 +950,115 @@ def delete_user(id):
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting user: {str(e)}', 'error')
+
+    return redirect(url_for('manage_users'))
+
+@app.route('/users/<int:id>/reset_password', methods=['POST'])
+@login_required
+def reset_user_password(id):
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+
+    user = User.query.get_or_404(id)
+
+    try:
+        # Generate password: letter + 6 digits + letter
+        first_letter = random.choice(string.ascii_letters)
+        six_digits = ''.join(random.choices(string.digits, k=6))
+        last_letter = random.choice(string.ascii_letters)
+        new_password = f"{first_letter}{six_digits}{last_letter}"
+        user.set_password(new_password)
+        db.session.commit()
+        flash(f'Password for {user.email} has been reset to: {new_password}')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error resetting password: {str(e)}', 'error')
+
+    return redirect(url_for('manage_users'))
+
+@app.route('/users/report/csv')
+@login_required
+def generate_user_report():
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+
+    # Get all users with position == 'user'
+    users = User.query.filter_by(position='user').all()
+
+    # Create CSV data
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Write header
+    writer.writerow(['Name', 'Email', 'Password'])
+
+    # Generate new random passwords for all users and include in CSV
+    try:
+        for user in users:
+            # Generate password: letter + 6 digits + letter
+            first_letter = random.choice(string.ascii_letters)
+            six_digits = ''.join(random.choices(string.digits, k=6))
+            last_letter = random.choice(string.ascii_letters)
+            new_password = f"{first_letter}{six_digits}{last_letter}"
+            user.set_password(new_password)
+            writer.writerow([user.name, user.email, new_password])
+
+        # Commit the new passwords to database
+        db.session.commit()
+        flash('All user passwords have been reset. New passwords are included in the CSV report.')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error generating report: {str(e)}', 'error')
+
+    # Create response
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': 'attachment; filename=user_credentials_report.csv'
+        }
+    )
+
+@app.route('/users/reset_all', methods=['POST'])
+@login_required
+def reset_all_user_passwords():
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+
+    # Get all users with position == 'user'
+    users = User.query.filter_by(position='user').all()
+
+    if not users:
+        flash('No users found with position "user"', 'info')
+        return redirect(url_for('manage_users'))
+
+    try:
+        reset_count = 0
+        reset_details = []
+
+        for user in users:
+            # Generate password: letter + 6 digits + letter
+            first_letter = random.choice(string.ascii_letters)
+            six_digits = ''.join(random.choices(string.digits, k=6))
+            last_letter = random.choice(string.ascii_letters)
+            new_password = f"{first_letter}{six_digits}{last_letter}"
+            user.set_password(new_password)
+            reset_details.append(f"{user.email}: {new_password}")
+            reset_count += 1
+
+        db.session.commit()
+
+        # Show flash message with all new passwords
+        flash(f'Successfully reset passwords for {reset_count} user(s):')
+        for detail in reset_details:
+            flash(detail)
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error resetting passwords: {str(e)}', 'error')
 
     return redirect(url_for('manage_users'))
 
@@ -3364,11 +3475,24 @@ def init_scheduler():
 
 
 # Initialize scheduler when app starts
-scheduler = None
+scheduler = init_scheduler()
+
+
+@app.route('/admin/test_vehicle_count')
+@login_required
+def test_vehicle_count():
+    """Manual trigger for testing daily vehicle count"""
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+
+    result = count_daily_active_vehicles()
+    if result:
+        flash('Daily vehicle count completed successfully!')
+    else:
+        flash('Error running daily vehicle count.', 'error')
+    return redirect(url_for('view_schedule'))
 
 
 if __name__ == '__main__':
-    # Start the scheduler
-    scheduler = init_scheduler()
-
     app.run(debug=True, host='0.0.0.0', port=5015)
