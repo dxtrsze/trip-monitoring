@@ -474,7 +474,14 @@ def edit_data(id):
             data.posting_date = datetime.strptime(posting_date_str, '%Y-%m-%d').date() if posting_date_str else None
 
             due_date_str = request.form.get('due_date')
-            data.due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date() if due_date_str else None
+            new_due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date() if due_date_str else None
+
+            # Check if due_date is being changed
+            old_due_date = data.due_date
+            due_date_changed = old_due_date != new_due_date
+
+            # Update due_date for the current record
+            data.due_date = new_due_date
 
             # Handle numeric fields
             data.ordered_qty = int(request.form['ordered_qty'])
@@ -484,7 +491,32 @@ def edit_data(id):
 
             # Save to DB
             db.session.commit()
-            flash('Record updated successfully!', 'success')
+
+            # If due_date changed, update all records with the same document_number
+            updated_count = 0
+            if due_date_changed:
+                document_number = data.document_number
+
+                # Find all records with the same document_number (excluding the current record)
+                related_records = Data.query.filter(
+                    Data.document_number == document_number,
+                    Data.id != id
+                ).all()
+
+                # Update their due_date and original_due_date
+                for record in related_records:
+                    record.due_date = new_due_date
+                    record.original_due_date = new_due_date
+                    updated_count += 1
+
+                if updated_count > 0:
+                    db.session.commit()
+
+            # Prepare success message
+            if updated_count > 0:
+                flash(f'Record updated successfully! Also updated due date for {updated_count} other record(s) with document number {data.document_number}', 'success')
+            else:
+                flash('Record updated successfully!', 'success')
             return redirect(url_for('view_data'))
 
         except ValueError as ve:
