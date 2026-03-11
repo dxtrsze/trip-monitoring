@@ -472,6 +472,12 @@ function saveReorder() {
     orders[detailId] = parseInt(input.value) || 1;
   });
 
+  // Debug: Log what's being sent
+  console.log('Saving delivery order:', {
+    trip_id: currentReorderTripId,
+    orders: orders
+  });
+
   // Send the update request
   fetch('/update_delivery_order', {
     method: 'POST',
@@ -485,6 +491,7 @@ function saveReorder() {
   })
   .then(response => response.json())
   .then(data => {
+    console.log('Server response:', data);
     if (data.success) {
       // Close the modal and reload the page
       reorderModal.hide();

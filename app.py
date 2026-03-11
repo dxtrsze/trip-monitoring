@@ -1795,7 +1795,8 @@ def get_trip_details(trip_id):
         return jsonify({'error': 'Access denied'}), 403
 
     try:
-        trip = db.session.get(Trip, trip_id)
+        # Eager load details to avoid lazy loading issues
+        trip = db.session.query(Trip).filter(Trip.id == trip_id).first()
         if not trip:
             return jsonify({'error': 'Trip not found'}), 404
 
@@ -1809,9 +1810,11 @@ def get_trip_details(trip_id):
                 'total_cbm': detail.total_cbm
             })
 
+        print(f"Fetched {len(details)} details for trip {trip_id}")
         return jsonify({'details': details})
 
     except Exception as e:
+        print(f"Error fetching trip details: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1824,7 +1827,7 @@ def update_delivery_order():
 
     try:
         data = request.get_json()
-        trip_id = data.get('trip_id')
+        trip_id = int(data.get('trip_id'))  # Ensure trip_id is an integer
         orders = data.get('orders', {})
 
         if not trip_id:
@@ -1839,16 +1842,26 @@ def update_delivery_order():
             return jsonify({'success': False, 'message': 'Trip not found'}), 404
 
         # Update each trip detail's delivery_order
-        for detail_id, order in orders.items():
-            detail = db.session.get(TripDetail, int(detail_id))
+        updated_count = 0
+        for detail_id_str, order in orders.items():
+            detail_id = int(detail_id_str)  # Convert detail_id to int
+            detail = db.session.get(TripDetail, detail_id)
             if detail and detail.trip_id == trip_id:
-                detail.delivery_order = order
+                detail.delivery_order = int(order)  # Ensure order is int
+                updated_count += 1
+            else:
+                print(f"Warning: Detail {detail_id} not found or not part of trip {trip_id}")
 
         db.session.commit()
-        return jsonify({'success': True, 'message': 'Delivery order updated successfully'})
+        print(f"Updated {updated_count} trip details for trip {trip_id}")
+        return jsonify({
+            'success': True,
+            'message': f'Delivery order updated successfully ({updated_count} stops updated)'
+        })
 
     except Exception as e:
         db.session.rollback()
+        print(f"Error updating delivery order: {str(e)}")
         return jsonify({'success': False, 'message': f'Error updating delivery order: {str(e)}'}), 500
 
 
