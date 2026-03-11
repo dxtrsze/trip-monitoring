@@ -277,11 +277,21 @@ def upload_data():
                 flash(f"Invalid CSV headers. {msg}", 'error')
                 return redirect(request.url)
 
-            records_added = 0
+            # ✅ OPTIMIZED: Batch processing for better performance
+            # Step 1: Load all CSV rows into memory and validate
+            all_rows = list(csv_reader)
+            if not all_rows:
+                flash("CSV file is empty", 'error')
+                return redirect(request.url)
+
+            # Step 2: Validate all rows first (data parsing)
+            validated_records = []
+            rows_to_insert = []
             records_skipped = 0
-            for row_num, row in enumerate(csv_reader, start=2):
+
+            for row_num, row in enumerate(all_rows, start=2):
                 try:
-                    # ✅ Use ONLY the flexible parser — remove old strptime lines!
+                    # Parse and validate data
                     posting_date = parse_date_flexible(row["Posting Date"])
                     due_date = parse_date_flexible(row["Due Date"])
                     cbm = float(row["CBM"]) if row["CBM"] else 0.0
@@ -303,47 +313,33 @@ def upload_data():
                     elif not branch_name_v2:
                         branch_name_v2 = branch_name
 
-                    # Check for duplicate based on document_number, item_number, and ordered_qty
-                    existing_record = Data.query.filter_by(
-                        document_number=row["Document Number"],
-                        item_number=row["Item No."],
-                        ordered_qty=ordered_qty_int
-                    ).first()
-
-                    if existing_record:
-                        records_skipped += 1
-                        continue  # Skip this row as it's a duplicate
-
-                    data_entry = Data(
-                        type=row["Type"],
-                        posting_date=posting_date,
-                        document_number=row["Document Number"],
-                        item_number=row["Item No."],
-                        ordered_qty=ordered_qty_int,
-                        delivered_qty=float(row["Delivered Quantity"]) if row["Delivered Quantity"] else 0.0,
-                        remaining_open_qty=float(row["Remaining Open Qty"]) if row["Remaining Open Qty"] else 0.0,
-                        from_whse_code=clean(row["From Warehouse Code"]),
-                        to_whse=clean(row["To Warehouse"]),
-                        remarks=clean(row["Remarks"]),
-                        special_instructions=clean(row["Special Instruction"]),
-                        branch_name=branch_name,
-                        branch_name_v2=branch_name_v2,
-                        document_status=clean(row["Document Status"]),
-                        original_due_date=due_date,
-                        due_date=due_date,
-                        user_code=clean(row["User_Code"]),
-                        po_number=clean(row["PO Number"]),
-                        isms_so_number=clean(row["ISMS SO#"]),
-                        cbm=float(row["CBM"]) if row["CBM"] else 0.0,
-                        total_cbm = round(cbm * ordered_qty, 2),
-                        customer_vendor_code=clean(row["Customer/Vendor Code"]),
-                        customer_vendor_name=clean(row["Customer/Vendor Name"]),
-                        delivery_type=clean(row["Delivery Type"]),
-                        status="Not Scheduled"
-                    )
-
-                    db.session.add(data_entry)
-                    records_added += 1
+                    # Store validated record
+                    validated_records.append({
+                        'row_num': row_num,
+                        'document_number': row["Document Number"],
+                        'item_number': row["Item No."],
+                        'ordered_qty': ordered_qty_int,
+                        'type': row["Type"],
+                        'posting_date': posting_date,
+                        'due_date': due_date,
+                        'cbm': cbm,
+                        'ordered_qty_float': ordered_qty,
+                        'delivered_qty': float(row["Delivered Quantity"]) if row["Delivered Quantity"] else 0.0,
+                        'remaining_open_qty': float(row["Remaining Open Qty"]) if row["Remaining Open Qty"] else 0.0,
+                        'from_whse_code': clean(row["From Warehouse Code"]),
+                        'to_whse': clean(row["To Warehouse"]),
+                        'remarks': clean(row["Remarks"]),
+                        'special_instructions': clean(row["Special Instruction"]),
+                        'branch_name': branch_name,
+                        'branch_name_v2': branch_name_v2,
+                        'document_status': clean(row["Document Status"]),
+                        'user_code': clean(row["User_Code"]),
+                        'po_number': clean(row["PO Number"]),
+                        'isms_so_number': clean(row["ISMS SO#"]),
+                        'customer_vendor_code': clean(row["Customer/Vendor Code"]),
+                        'customer_vendor_name': clean(row["Customer/Vendor Name"]),
+                        'delivery_type': clean(row["Delivery Type"])
+                    })
 
                 except ValueError as ve:
                     flash(f"Row {row_num}: Invalid data format – {str(ve)}", 'error')
@@ -354,7 +350,81 @@ def upload_data():
                     db.session.rollback()
                     return redirect(request.url)
 
-            db.session.commit()
+            # Step 3: Batch duplicate check - SINGLE QUERY instead of N queries
+            # Build list of all unique (document_number, item_number, ordered_qty) from CSV
+            csv_keys = [(r['document_number'], r['item_number'], r['ordered_qty']) for r in validated_records]
+
+            # Query all existing records that match ANY of the CSV keys in one go
+            # Use OR clauses for SQLite compatibility
+            if csv_keys:
+                # Split into batches to avoid SQL query size limits
+                batch_size = 500
+                existing_records = []
+
+                for i in range(0, len(csv_keys), batch_size):
+                    batch = csv_keys[i:i + batch_size]
+                    # Build OR conditions for each batch
+                    or_conditions = db.or_(
+                        *(db.and_(
+                            Data.document_number == doc_num,
+                            Data.item_number == item_num,
+                            Data.ordered_qty == ord_qty
+                        ) for doc_num, item_num, ord_qty in batch)
+                    )
+                    batch_records = Data.query.filter(or_conditions).all()
+                    existing_records.extend(batch_records)
+
+                # Build set of existing records for fast lookup
+                existing_keys = {(r.document_number, r.item_number, r.ordered_qty) for r in existing_records}
+            else:
+                existing_keys = set()
+
+            # Step 4: Filter out duplicates and prepare bulk insert
+            records_to_insert = []
+            for record in validated_records:
+                key = (record['document_number'], record['item_number'], record['ordered_qty'])
+                if key in existing_keys:
+                    records_skipped += 1
+                else:
+                    records_to_insert.append(record)
+
+            # Step 5: Bulk insert all non-duplicate records at once
+            if records_to_insert:
+                with db.session.no_autoflush:
+                    for record in records_to_insert:
+                        data_entry = Data(
+                            type=record['type'],
+                            posting_date=record['posting_date'],
+                            document_number=record['document_number'],
+                            item_number=record['item_number'],
+                            ordered_qty=record['ordered_qty'],
+                            delivered_qty=record['delivered_qty'],
+                            remaining_open_qty=record['remaining_open_qty'],
+                            from_whse_code=record['from_whse_code'],
+                            to_whse=record['to_whse'],
+                            remarks=record['remarks'],
+                            special_instructions=record['special_instructions'],
+                            branch_name=record['branch_name'],
+                            branch_name_v2=record['branch_name_v2'],
+                            document_status=record['document_status'],
+                            original_due_date=record['due_date'],
+                            due_date=record['due_date'],
+                            user_code=record['user_code'],
+                            po_number=record['po_number'],
+                            isms_so_number=record['isms_so_number'],
+                            cbm=record['cbm'],
+                            total_cbm=round(record['cbm'] * record['ordered_qty_float'], 2),
+                            customer_vendor_code=record['customer_vendor_code'],
+                            customer_vendor_name=record['customer_vendor_name'],
+                            delivery_type=record['delivery_type'],
+                            status="Not Scheduled"
+                        )
+                        db.session.add(data_entry)
+
+                db.session.commit()
+                records_added = len(records_to_insert)
+            else:
+                records_added = 0
             message = f"Successfully uploaded {records_added} record(s)!"
             if records_skipped > 0:
                 message += f" Skipped {records_skipped} duplicate record(s)."
