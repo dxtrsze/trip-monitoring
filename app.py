@@ -1861,7 +1861,9 @@ def get_trip_details(trip_id):
                 'id': detail.id,
                 'branch_name_v2': detail.branch_name_v2,
                 'delivery_order': detail.delivery_order,
-                'total_cbm': detail.total_cbm
+                'total_cbm': detail.total_cbm,
+                'arrive': detail.arrive.strftime('%Y-%m-%dT%H:%M') if detail.arrive else None,
+                'departure': detail.departure.strftime('%Y-%m-%dT%H:%M') if detail.departure else None
             })
 
         print(f"Fetched {len(details)} details for trip {trip_id}")
@@ -1965,6 +1967,58 @@ def update_trip_crew():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Error updating crew: {str(e)}'}), 500
+
+
+@app.route('/update_trip_times', methods=['POST'])
+@login_required
+def update_trip_times():
+    """Update arrive and departure times for trip details"""
+    if current_user.position != 'admin':
+        return jsonify({'success': False, 'message': 'Access denied. Admin privileges required.'}), 403
+
+    try:
+        data = request.get_json()
+        updates = data.get('updates', [])
+
+        if not updates:
+            return jsonify({'success': False, 'message': 'No updates provided'}), 400
+
+        for update in updates:
+            detail_id = update.get('detail_id')
+            arrive = update.get('arrive')
+            departure = update.get('departure')
+
+            if not detail_id:
+                continue
+
+            detail = db.session.get(TripDetail, detail_id)
+            if not detail:
+                continue
+
+            # Update arrive time
+            if arrive:
+                try:
+                    detail.arrive = datetime.strptime(arrive, '%Y-%m-%dT%H:%M')
+                except ValueError:
+                    return jsonify({'success': False, 'message': f'Invalid arrive time format for detail {detail_id}'}), 400
+            elif arrive is None:
+                detail.arrive = None
+
+            # Update departure time
+            if departure:
+                try:
+                    detail.departure = datetime.strptime(departure, '%Y-%m-%dT%H:%M')
+                except ValueError:
+                    return jsonify({'success': False, 'message': f'Invalid departure time format for detail {detail_id}'}), 400
+            elif departure is None:
+                detail.departure = None
+
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Times updated successfully'})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Error updating times: {str(e)}'}), 500
 
 
 # view_schedule.html individual delete button for each trip
@@ -2611,20 +2665,44 @@ def truck_utilization():
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
         end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
 
-        # Query schedules within date range that have vehicle info
-        schedules = Schedule.query.filter(
+        # Query schedules within date range and join with trips to count branches
+        # We need to get Trip data with Vehicle info and count TripDetails
+        from sqlalchemy import func
+
+        query = db.session.query(
+            Schedule.delivery_schedule,
+            Vehicle.plate_number,
+            Vehicle.capacity,
+            Trip.total_cbm.label('actual_cbm'),
+            func.count(TripDetail.id).label('branch_count')
+        ).join(
+            Trip, Schedule.id == Trip.schedule_id
+        ).join(
+            Vehicle, Trip.vehicle_id == Vehicle.id
+        ).outerjoin(
+            TripDetail, Trip.id == TripDetail.trip_id
+        ).filter(
             Schedule.delivery_schedule >= start_date,
-            Schedule.delivery_schedule <= end_date,
-            Schedule.plate_number.isnot(None)
-        ).order_by(Schedule.delivery_schedule).all()
+            Schedule.delivery_schedule <= end_date
+        ).group_by(
+            Schedule.delivery_schedule,
+            Vehicle.plate_number,
+            Vehicle.capacity,
+            Trip.id,
+            Trip.total_cbm
+        ).order_by(
+            Schedule.delivery_schedule,
+            Trip.trip_number
+        ).all()
 
         result = []
-        for schedule in schedules:
+        for row in query:
             result.append({
-                'delivery_schedule': schedule.delivery_schedule.strftime('%Y-%m-%d'),
-                'plate_number': schedule.plate_number or 'N/A',
-                'capacity': schedule.capacity or 0,
-                'actual': schedule.actual or 0
+                'delivery_schedule': row.delivery_schedule.strftime('%Y-%m-%d'),
+                'plate_number': row.plate_number or 'N/A',
+                'capacity': row.capacity or 0,
+                'actual': row.actual_cbm or 0,
+                'branch_count': row.branch_count or 0
             })
 
         return jsonify(result)
@@ -2651,32 +2729,55 @@ def export_truck_utilization():
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
         end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
 
-        # Query schedules within date range
-        schedules = Schedule.query.filter(
+        # Query schedules within date range and join with trips to count branches
+        from sqlalchemy import func
+
+        query = db.session.query(
+            Schedule.delivery_schedule,
+            Vehicle.plate_number,
+            Vehicle.capacity,
+            Trip.total_cbm.label('actual_cbm'),
+            func.count(TripDetail.id).label('branch_count')
+        ).join(
+            Trip, Schedule.id == Trip.schedule_id
+        ).join(
+            Vehicle, Trip.vehicle_id == Vehicle.id
+        ).outerjoin(
+            TripDetail, Trip.id == TripDetail.trip_id
+        ).filter(
             Schedule.delivery_schedule >= start_date,
-            Schedule.delivery_schedule <= end_date,
-            Schedule.plate_number.isnot(None)
-        ).order_by(Schedule.delivery_schedule).all()
+            Schedule.delivery_schedule <= end_date
+        ).group_by(
+            Schedule.delivery_schedule,
+            Vehicle.plate_number,
+            Vehicle.capacity,
+            Trip.id,
+            Trip.total_cbm
+        ).order_by(
+            Schedule.delivery_schedule,
+            Trip.trip_number
+        ).all()
 
         # Create CSV data
         output = io.StringIO()
         writer = csv.writer(output)
 
         # Write headers
-        writer.writerow(['Delivery Schedule', 'Plate Number', 'Capacity', 'Actual', '% Utilization'])
+        writer.writerow(['Delivery Schedule', 'Plate Number', 'Capacity (CBM)', 'Actual (CBM)', '% Utilization', 'Branch Count'])
 
         # Write data rows
-        for schedule in schedules:
-            capacity = schedule.capacity or 0
-            actual = schedule.actual or 0
+        for row in query:
+            capacity = row.capacity or 0
+            actual = row.actual_cbm or 0
             utilization = (actual / capacity * 100) if capacity > 0 else 0
 
             writer.writerow([
-                schedule.delivery_schedule.strftime('%Y-%m-%d'),
-                schedule.plate_number or 'N/A',
+                row.delivery_schedule.strftime('%Y-%m-%d'),
+                row.plate_number or 'N/A',
                 capacity,
                 f"{actual:.3f}",
-                f"{utilization:.1f}%"
+                f"{utilization:.1f}%",
+                row.branch_count or 0
             ])
 
         output.seek(0)

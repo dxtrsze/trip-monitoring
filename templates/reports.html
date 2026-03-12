@@ -258,6 +258,7 @@
             <th>Capacity (CBM)</th>
             <th>Actual (CBM)</th>
             <th>% Utilization</th>
+            <th># of Drops</th>
           </tr>
         </thead>
         <tbody id="truckTableBody">
@@ -776,7 +777,7 @@ document.addEventListener('DOMContentLoaded', function() {
     truckTableBody.innerHTML = '';
 
     if (data.length === 0) {
-      truckTableBody.innerHTML = '<tr><td colspan="5" class="text-center">No data found for the selected date range</td></tr>';
+      truckTableBody.innerHTML = '<tr><td colspan="6" class="text-center">No data found for the selected date range</td></tr>';
     } else {
       data.forEach(row => {
         const tr = document.createElement('tr');
@@ -785,6 +786,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const utilization = row.capacity > 0 ? (row.actual / row.capacity * 100).toFixed(1) : '0.0';
         const utilizationClass = utilization >= 80 ? 'success' : utilization >= 50 ? 'warning' : 'danger';
         const actualFormatted = parseFloat(row.actual || 0).toFixed(3);
+        const branchCount = row.branch_count || 0;
 
         tr.innerHTML = `
           <td>${row.delivery_schedule}</td>
@@ -792,6 +794,7 @@ document.addEventListener('DOMContentLoaded', function() {
           <td>${row.capacity || 'N/A'}</td>
           <td>${actualFormatted}</td>
           <td><span class="badge bg-${utilizationClass}">${utilization}%</span></td>
+          <td><span class="badge bg-info fs-6">${branchCount}</span></td>
         `;
         truckTableBody.appendChild(tr);
       });
