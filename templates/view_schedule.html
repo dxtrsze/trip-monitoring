@@ -13,15 +13,44 @@
 </div>
 
 {% for schedule in schedules %}
-<div class="card mb-4 {% if schedule.delivery_schedule < today %}border-warning{% endif %}">
-  <div class="card-header {% if schedule.delivery_schedule < today %}bg-warning text-dark{% endif %}">
+  {# Check if schedule has incomplete trips (any trip_detail with NULL departure) #}
+  {% set has_incomplete = namespace(value=false) %}
+  {% if schedule.trips %}
+    {% for trip in schedule.trips %}
+      {% for detail in trip.details %}
+        {% if detail.departure == none %}
+          {% set has_incomplete.value = true %}
+        {% endif %}
+      {% endfor %}
+    {% endfor %}
+  {% endif %}
+
+  {% if schedule.delivery_schedule < today %}
+    {% set status_badge_class = 'bg-warning text-dark' %}
+    {% set border_class = 'border-warning' %}
+  {% elif schedule.delivery_schedule == today %}
+    {% set status_badge_class = '' %}
+    {% set border_class = '' %}
+  {% else %}
+    {% set status_badge_class = 'bg-info text-white' %}
+    {% set border_class = '' %}
+  {% endif %}
+
+<div class="card mb-4 {% if border_class %}{{ border_class }}{% endif %}">
+  <div class="card-header {% if status_badge_class %}{{ status_badge_class }}{% endif %}">
     <h5>
       {{ schedule.delivery_schedule.strftime('%B %d, %Y') }}
       <span class="badge bg-info">Schedule #{{ schedule.id }}</span>
       {% if schedule.delivery_schedule < today %}
-      <span class="badge bg-danger ms-2">Incomplete Trip</span>
+        {% if has_incomplete.value %}
+        <span class="badge bg-danger ms-2">Incomplete Trip</span>
+        {% else %}
+        <span class="badge bg-success ms-2">Complete</span>
+        {% endif %}
+      {% elif schedule.delivery_schedule == today %}
+        <span class="badge bg-success ms-2">Today</span>
       {% else %}
-      <span class="badge bg-success ms-2">Today</span>
+        <span class="badge bg-primary ms-2">Upcoming</span>
       {% endif %}
     </h5>
   </div>
