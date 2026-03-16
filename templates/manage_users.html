@@ -30,6 +30,8 @@
                         <th>Email</th>
                         <th>Position</th>
                         <th>Status</th>
+                        <th>Daily Rate</th>
+                        <th>Schedule</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -47,6 +49,20 @@
                             <span class="badge bg-{% if user.status == 'active' %}success{% else %}secondary{% endif %}">
                                 {{ user.status|title }}
                             </span>
+                        </td>
+                        <td>
+                            {% if user.daily_rate %}
+                                ₱{{ "%.2f"|format(user.daily_rate) }}
+                            {% else %}
+                                <span class="text-muted">Not set</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.sched_start and user.sched_end %}
+                                {{ user.sched_start }} - {{ user.sched_end }}
+                            {% else %}
+                                <span class="text-muted">Not set</span>
+                            {% endif %}
                         </td>
                         <td>
                             <a href="{{ url_for('edit_user', id=user.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
@@ -170,6 +186,21 @@
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
                         </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="daily_rate" class="form-label">Daily Rate (₱)</label>
+                        <input type="number" class="form-control" id="daily_rate" name="daily_rate" step="0.01" min="0" placeholder="">
+                        <div class="form-text">Optional: Daily rate for payroll calculations</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="sched_start" class="form-label">Schedule Start</label>
+                            <input type="time" class="form-control" id="sched_start" name="sched_start">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="sched_end" class="form-label">Schedule End</label>
+                            <input type="time" class="form-control" id="sched_end" name="sched_end">
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">

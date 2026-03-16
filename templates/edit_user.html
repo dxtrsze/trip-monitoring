@@ -38,6 +38,21 @@
                     </select>
                 </div>
             </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="daily_rate" class="form-label">Daily Rate (₱)</label>
+                    <input type="number" class="form-control" id="daily_rate" name="daily_rate" step="0.01" min="0" value="{{ user.daily_rate or '' }}" placeholder="">
+                    <div class="form-text">Daily rate for payroll calculations</div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="sched_start" class="form-label">Schedule Start</label>
+                    <input type="time" class="form-control" id="sched_start" name="sched_start" value="{{ user.sched_start or '' }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="sched_end" class="form-label">Schedule End</label>
+                    <input type="time" class="form-control" id="sched_end" name="sched_end" value="{{ user.sched_end or '' }}">
+                </div>
+            </div>
             <div class="mb-3">
                 <label for="password" class="form-label">Password (leave blank to keep current)</label>
                 <input type="password" class="form-control" id="password" name="password" minlength="6">

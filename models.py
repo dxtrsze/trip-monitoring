@@ -172,6 +172,9 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     position = db.Column(db.String(50), nullable=False, default='user')  # 'admin' or 'user'
     status = db.Column(db.String(50), nullable=False, default='active')  # 'active' or 'inactive'
+    daily_rate = db.Column(db.Float, nullable=True)  # Daily rate for payroll
+    sched_start = db.Column(db.String(10), nullable=True)  # Schedule start time (e.g., "08:00")
+    sched_end = db.Column(db.String(10), nullable=True)  # Schedule end time (e.g., "17:00")
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -181,6 +184,25 @@ class User(UserMixin, db.Model):
 
     def __repr__(self):
         return f'<User {self.email} - {self.position}>'
+
+class TimeLog(db.Model):
+    __tablename__ = 'time_log'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user = db.relationship('User', backref=db.backref('time_logs', lazy=True))
+    time_in = db.Column(db.DateTime, nullable=False)  # Time in
+    time_out = db.Column(db.DateTime, nullable=True)  # Time out
+    hrs_rendered = db.Column(db.Float, nullable=True)  # Hours rendered
+    daily_rate = db.Column(db.Float, nullable=True)  # Daily rate
+    over_time = db.Column(db.Float, nullable=True, default=0.0)  # Overtime hours
+    pay = db.Column(db.Float, nullable=True)  # Regular pay
+    ot_pay = db.Column(db.Float, nullable=True, default=0.0)  # Overtime pay
+    sched_start = db.Column(db.String(10), nullable=True)  # Schedule start (e.g., "08:00")
+    sched_end = db.Column(db.String(10), nullable=True)  # Schedule end (e.g., "17:00")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)  # Record creation timestamp
+
+    def __repr__(self):
+        return f'<TimeLog {self.id} - User {self.user_id} - {self.time_in}>'
 
 class DailyVehicleCount(db.Model):
     __tablename__ = 'daily_vehicle_count'

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Time Log - Trip Monitoring System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Edit Time Log</h1>
+    <a href="{{ url_for('time_logs') }}" class="btn btn-secondary">Back to Time Logs</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            <strong>User:</strong> {{ time_log.user.name }} ({{ time_log.user.email }})
+        </div>
+
+        <form method="post">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="time_in" class="form-label">Time In</label>
+                    <input type="datetime-local" class="form-control" id="time_in" name="time_in" value="{{ time_log.time_in.strftime('%Y-%m-%dT%H:%M') }}" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="time_out" class="form-label">Time Out</label>
+                    <input type="datetime-local" class="form-control" id="time_out" name="time_out"
+                           {% if time_log.time_out %}value="{{ time_log.time_out.strftime('%Y-%m-%dT%H:%M') }}"{% endif %}>
+                    <div class="form-text">Leave empty if user hasn't timed out yet</div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="daily_rate" class="form-label">Daily Rate (₱)</label>
+                    <input type="number" class="form-control" id="daily_rate" name="daily_rate" step="0.01" min="0" value="{{ time_log.daily_rate or '' }}">
+                    <div class="form-text">User's current rate: ₱{{ "%.2f"|format(time_log.user.daily_rate) if time_log.user.daily_rate else 'Not set' }}</div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="sched_start" class="form-label">Schedule Start</label>
+                    <input type="time" class="form-control" id="sched_start" name="sched_start" value="{{ time_log.sched_start or '' }}">
+                    <div class="form-text">User's schedule: {{ time_log.user.sched_start or 'Not set' }}</div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="sched_end" class="form-label">Schedule End</label>
+                    <input type="time" class="form-control" id="sched_end" name="sched_end" value="{{ time_log.sched_end or '' }}">
+                    <div class="form-text">User's schedule: {{ time_log.user.sched_end or 'Not set' }}</div>
+                </div>
+            </div>
+
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>Note:</strong> Hours rendered, overtime, and pay will be automatically recalculated when you save changes.
+                <ul class="mb-0 mt-2">
+                    <li>If time_in is before sched_start, hours count from sched_start</li>
+                    <li>Overtime is only counted after 1 hour beyond sched_end</li>
+                    <li><strong>Lunch break (12:00 PM - 1:00 PM)</strong> is automatically deducted from regular hours if work period crosses this time</li>
+                    <li>Lunch deduction applies to regular hours only, NOT to overtime hours</li>
+                </ul>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save"></i> Save Changes & Recalculate
+                </button>
+                <a href="{{ url_for('time_logs') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if time_log.time_out %}
+<div class="card mt-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">Current Calculations</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <strong>Hours Rendered:</strong><br>
+                {{ "%.2f"|format(time_log.hrs_rendered) if time_log.hrs_rendered else '-' }}
+            </div>
+            <div class="col-md-3">
+                <strong>Overtime Hours:</strong><br>
+                {{ "%.2f"|format(time_log.over_time) if time_log.over_time else '0.00' }}
+            </div>
+            <div class="col-md-3">
+                <strong>Regular Pay:</strong><br>
+                ₱{{ "%.2f"|format(time_log.pay) if time_log.pay else '-' }}
+            </div>
+            <div class="col-md-3">
+                <strong>OT Pay:</strong><br>
+                ₱{{ "%.2f"|format(time_log.ot_pay) if time_log.ot_pay else '0.00' }}
+            </div>
+        </div>
+        {% if time_log.pay and time_log.ot_pay %}
+        <hr>
+        <div class="text-end">
+            <strong>Total Pay: ₱{{ "%.2f"|format(time_log.pay + time_log.ot_pay) }}</strong>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

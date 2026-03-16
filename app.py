@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import pandas as pd
-from models import db, Vehicle, Manpower, Data, Schedule, Trip, TripDetail, Cluster, User, Odo, DailyVehicleCount, Backload
+from models import db, Vehicle, Manpower, Data, Schedule, Trip, TripDetail, Cluster, User, Odo, DailyVehicleCount, Backload, TimeLog
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, subqueryload
 from functools import wraps
@@ -1126,6 +1126,9 @@ def add_user():
     password = request.form.get('password')
     position = request.form.get('position')
     status = request.form.get('status', 'active')
+    daily_rate = request.form.get('daily_rate')
+    sched_start = request.form.get('sched_start')
+    sched_end = request.form.get('sched_end')
 
     if not name or not email or not password or not position:
         flash('Name, email, password, and position are required', 'error')
@@ -1144,6 +1147,21 @@ def add_user():
             position=position,
             status=status
         )
+
+        # Set optional payroll fields
+        if daily_rate:
+            try:
+                user.daily_rate = float(daily_rate)
+            except ValueError:
+                flash('Invalid daily rate format', 'error')
+                return redirect(url_for('manage_users'))
+
+        if sched_start:
+            user.sched_start = sched_start
+
+        if sched_end:
+            user.sched_end = sched_end
+
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
@@ -1170,6 +1188,9 @@ def edit_user(id):
             position = request.form.get('position')
             status = request.form.get('status', 'active')
             password = request.form.get('password')
+            daily_rate = request.form.get('daily_rate')
+            sched_start = request.form.get('sched_start')
+            sched_end = request.form.get('sched_end')
 
             # Check if email already exists (excluding current user)
             existing_user = User.query.filter(User.email == user.email, User.id != id).first()
@@ -1179,6 +1200,26 @@ def edit_user(id):
 
             user.position = position
             user.status = status
+
+            # Update optional payroll fields
+            if daily_rate and daily_rate.strip():
+                try:
+                    user.daily_rate = float(daily_rate)
+                except ValueError:
+                    flash('Invalid daily rate format', 'error')
+                    return redirect(url_for('manage_users'))
+            else:
+                user.daily_rate = None
+
+            if sched_start and sched_start.strip():
+                user.sched_start = sched_start
+            else:
+                user.sched_start = None
+
+            if sched_end and sched_end.strip():
+                user.sched_end = sched_end
+            else:
+                user.sched_end = None
 
             # Only update password if provided
             if password and password.strip():
@@ -2375,6 +2416,371 @@ def reports():
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('view_schedule'))
     return render_template('reports.html')
+
+# Time Log Routes
+@app.route('/time_logs')
+@login_required
+def time_logs():
+    """View time logs - admins see all, regular users see only theirs"""
+    # Get date filters from query parameters
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    # Build base query
+    if current_user.position == 'admin':
+        # Admins see all time logs
+        query = TimeLog.query
+        active_query = TimeLog.query
+    else:
+        # Regular users see only their own time logs
+        query = TimeLog.query.filter_by(user_id=current_user.id)
+        active_query = TimeLog.query.filter_by(user_id=current_user.id)
+
+    # Apply date filters if provided
+    if start_date_str:
+        try:
+            from datetime import datetime, timedelta
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            # Filter time_in >= start_date at 00:00:00
+            start_datetime = datetime.combine(start_date, datetime.min.time())
+            query = query.filter(TimeLog.time_in >= start_datetime)
+            if current_user.position == 'admin':
+                active_query = active_query.filter(TimeLog.time_in >= start_datetime)
+        except ValueError:
+            pass
+
+    if end_date_str:
+        try:
+            from datetime import datetime, timedelta
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            # Filter time_in < end_date + 1 day (at 23:59:59)
+            end_datetime = datetime.combine(end_date, datetime.max.time())
+            query = query.filter(TimeLog.time_in <= end_datetime)
+            if current_user.position == 'admin':
+                active_query = active_query.filter(TimeLog.time_in <= end_datetime)
+        except ValueError:
+            pass
+
+    # Order by time_in descending
+    time_logs = query.order_by(TimeLog.time_in.desc()).all()
+
+    # Get active time logs (those without time_out)
+    if current_user.position == 'admin':
+        active_time_logs = active_query.filter_by(time_out=None).order_by(TimeLog.time_in.desc()).all()
+    else:
+        active_time_logs = active_query.filter_by(time_out=None).order_by(TimeLog.time_in.desc()).all()
+
+    return render_template('time_logs.html', time_logs=time_logs, active_time_logs=active_time_logs)
+
+@app.route('/time_in', methods=['POST'])
+@login_required
+def time_in():
+    """Record time in for the current user"""
+    try:
+        time_in_str = request.form.get('time_in_datetime')
+
+        if not time_in_str:
+            flash('Time in is required', 'error')
+            return redirect(url_for('time_logs'))
+
+        # Parse the datetime string from datetime-local input
+        time_in = datetime.strptime(time_in_str, '%Y-%m-%dT%H:%M')
+
+        # Create new time log entry
+        time_log = TimeLog(
+            user_id=current_user.id,
+            time_in=time_in,
+            daily_rate=current_user.daily_rate,
+            sched_start=current_user.sched_start,
+            sched_end=current_user.sched_end
+        )
+
+        db.session.add(time_log)
+        db.session.commit()
+
+        flash(f'Successfully timed in at {time_in.strftime("%I:%M %p")}!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error recording time in: {str(e)}', 'error')
+
+    return redirect(url_for('time_logs'))
+
+@app.route('/time_out', methods=['POST'])
+@login_required
+def time_out():
+    """Record time out and calculate hours and pay"""
+    try:
+        time_out_str = request.form.get('time_out_datetime')
+        time_log_id = request.form.get('time_log_id')
+
+        if not time_out_str or not time_log_id:
+            flash('Time out and time log selection are required', 'error')
+            return redirect(url_for('time_logs'))
+
+        # Parse the datetime string
+        time_out = datetime.strptime(time_out_str, '%Y-%m-%dT%H:%M')
+
+        # Get the time log entry (admins can time out any log, regular users only their own)
+        if current_user.position == 'admin':
+            time_log = TimeLog.query.get_or_404(time_log_id)
+        else:
+            time_log = TimeLog.query.filter_by(id=time_log_id, user_id=current_user.id).first_or_404()
+
+        # Update time out
+        time_log.time_out = time_out
+
+        # Calculate overtime and pay if daily_rate is set
+        if time_log.daily_rate and time_log.sched_start and time_log.sched_end:
+            try:
+                # Parse schedule times
+                sched_start_dt = datetime.strptime(time_log.sched_start, '%H:%M')
+                sched_end_dt = datetime.strptime(time_log.sched_end, '%H:%M')
+
+                # Create datetime objects for schedule on the same day as time_in
+                sched_start_actual = time_log.time_in.replace(
+                    hour=sched_start_dt.hour,
+                    minute=sched_start_dt.minute,
+                    second=0,
+                    microsecond=0
+                )
+                sched_end_actual = time_log.time_in.replace(
+                    hour=sched_end_dt.hour,
+                    minute=sched_end_dt.minute,
+                    second=0,
+                    microsecond=0
+                )
+
+                # Handle the case where time_in is before sched_start
+                # hrs_rendered starts counting from sched_start, not actual time_in
+                if time_log.time_in < sched_start_actual:
+                    effective_start = sched_start_actual
+                else:
+                    effective_start = time_log.time_in
+
+                # Calculate hrs_rendered from effective_start to time_out
+                time_diff = time_out - effective_start
+                hrs_rendered = time_diff.total_seconds() / 3600  # Convert to hours
+
+                # Deduct 1 hour for lunch break (12:00 PM - 1:00 PM) if work period crosses this time
+                lunch_start = effective_start.replace(hour=12, minute=0, second=0, microsecond=0)
+                lunch_end = effective_start.replace(hour=13, minute=0, second=0, microsecond=0)
+
+                # Check if the work period crosses lunch time
+                crosses_lunch = (effective_start < lunch_end and time_out > lunch_start)
+
+                if crosses_lunch:
+                    # Deduct 1 hour for lunch break from regular hours
+                    hrs_rendered_for_pay = max(0, hrs_rendered - 1.0)
+                    time_log.hrs_rendered = round(hrs_rendered - 1.0, 2)  # Display includes lunch deduction
+                else:
+                    hrs_rendered_for_pay = hrs_rendered
+                    time_log.hrs_rendered = round(hrs_rendered, 2)
+
+                # Calculate scheduled hours (from sched_start to sched_end)
+                scheduled_hours = (sched_end_actual - sched_start_actual).total_seconds() / 3600
+
+                # Calculate overtime: only count hours >= 1 hour after sched_end
+                # If time_out is more than 1 hour after sched_end, count the excess as OT
+                # Note: Lunch deduction does NOT apply to overtime hours
+                time_beyond_sched = (time_out - sched_end_actual).total_seconds() / 3600
+
+                if time_beyond_sched >= 1.0:
+                    # Overtime is the time beyond 1 hour after sched_end
+                    overtime = time_beyond_sched
+                    time_log.over_time = round(overtime, 2)
+                else:
+                    time_log.over_time = 0.0
+
+                # Calculate regular pay (based on scheduled hours or actual hours worked, whichever is less)
+                hourly_rate = time_log.daily_rate / 8  # Assuming 8-hour workday for daily rate
+
+                # Regular pay covers hours up to sched_end (with lunch deduction if applicable)
+                regular_hours = min(hrs_rendered_for_pay, scheduled_hours)
+                time_log.pay = round(hourly_rate * regular_hours, 2)
+
+                # Calculate overtime pay (1.25x hourly rate)
+                if time_log.over_time > 0:
+                    ot_hourly_rate = hourly_rate * 1.25
+                    time_log.ot_pay = round(ot_hourly_rate * time_log.over_time, 2)
+                else:
+                    time_log.ot_pay = 0.0
+
+            except Exception as e:
+                # If schedule calculation fails, still save the time log
+                time_diff = time_out - time_log.time_in
+                time_log.hrs_rendered = round(time_diff.total_seconds() / 3600, 2)
+                time_log.over_time = 0.0
+                time_log.pay = None
+                time_log.ot_pay = 0.0
+        else:
+            # No daily rate set, just calculate simple hrs_rendered
+            time_diff = time_out - time_log.time_in
+            time_log.hrs_rendered = round(time_diff.total_seconds() / 3600, 2)
+            time_log.over_time = 0.0
+            time_log.pay = None
+            time_log.ot_pay = 0.0
+
+        db.session.commit()
+
+        # Customize success message
+        if current_user.position == 'admin' and time_log.user_id != current_user.id:
+            flash(f'Successfully timed out {time_log.user.name} at {time_out.strftime("%I:%M %p")}! Hours rendered: {time_log.hrs_rendered}', 'success')
+        else:
+            flash(f'Successfully timed out at {time_out.strftime("%I:%M %p")}! Hours rendered: {time_log.hrs_rendered}', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error recording time out: {str(e)}', 'error')
+
+    return redirect(url_for('time_logs'))
+
+@app.route('/time_logs/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_time_log(id):
+    """Edit time log details and recalculate hours/pay"""
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('time_logs'))
+
+    time_log = TimeLog.query.get_or_404(id)
+
+    if request.method == 'POST':
+        try:
+            # Get form data
+            time_in_str = request.form.get('time_in')
+            time_out_str = request.form.get('time_out')
+            daily_rate_str = request.form.get('daily_rate')
+            sched_start = request.form.get('sched_start')
+            sched_end = request.form.get('sched_end')
+
+            # Update time_in
+            if time_in_str:
+                time_log.time_in = datetime.strptime(time_in_str, '%Y-%m-%dT%H:%M')
+
+            # Update time_out (can be empty/null)
+            if time_out_str and time_out_str.strip():
+                time_log.time_out = datetime.strptime(time_out_str, '%Y-%m-%dT%H:%M')
+            else:
+                time_log.time_out = None
+
+            # Update daily_rate
+            if daily_rate_str and daily_rate_str.strip():
+                time_log.daily_rate = float(daily_rate_str)
+            else:
+                time_log.daily_rate = None
+
+            # Update schedule
+            if sched_start and sched_start.strip():
+                time_log.sched_start = sched_start
+            else:
+                time_log.sched_start = None
+
+            if sched_end and sched_end.strip():
+                time_log.sched_end = sched_end
+            else:
+                time_log.sched_end = None
+
+            # Recalculate hours and pay if time_out is set
+            if time_log.time_out:
+                if time_log.daily_rate and time_log.sched_start and time_log.sched_end:
+                    try:
+                        # Parse schedule times
+                        sched_start_dt = datetime.strptime(time_log.sched_start, '%H:%M')
+                        sched_end_dt = datetime.strptime(time_log.sched_end, '%H:%M')
+
+                        # Create datetime objects for schedule on the same day as time_in
+                        sched_start_actual = time_log.time_in.replace(
+                            hour=sched_start_dt.hour,
+                            minute=sched_start_dt.minute,
+                            second=0,
+                            microsecond=0
+                        )
+                        sched_end_actual = time_log.time_in.replace(
+                            hour=sched_end_dt.hour,
+                            minute=sched_end_dt.minute,
+                            second=0,
+                            microsecond=0
+                        )
+
+                        # Handle the case where time_in is before sched_start
+                        if time_log.time_in < sched_start_actual:
+                            effective_start = sched_start_actual
+                        else:
+                            effective_start = time_log.time_in
+
+                        # Calculate hrs_rendered from effective_start to time_out
+                        time_diff = time_log.time_out - effective_start
+                        hrs_rendered = time_diff.total_seconds() / 3600
+
+                        # Deduct 1 hour for lunch break (12:00 PM - 1:00 PM) if work period crosses this time
+                        lunch_start = effective_start.replace(hour=12, minute=0, second=0, microsecond=0)
+                        lunch_end = effective_start.replace(hour=13, minute=0, second=0, microsecond=0)
+
+                        # Check if the work period crosses lunch time
+                        crosses_lunch = (effective_start < lunch_end and time_log.time_out > lunch_start)
+
+                        if crosses_lunch:
+                            # Deduct 1 hour for lunch break from regular hours
+                            hrs_rendered_for_pay = max(0, hrs_rendered - 1.0)
+                            time_log.hrs_rendered = round(hrs_rendered - 1.0, 2)  # Display includes lunch deduction
+                        else:
+                            hrs_rendered_for_pay = hrs_rendered
+                            time_log.hrs_rendered = round(hrs_rendered, 2)
+
+                        # Calculate scheduled hours
+                        scheduled_hours = (sched_end_actual - sched_start_actual).total_seconds() / 3600
+
+                        # Calculate overtime: only count hours >= 1 hour after sched_end
+                        # Note: Lunch deduction does NOT apply to overtime hours
+                        time_beyond_sched = (time_log.time_out - sched_end_actual).total_seconds() / 3600
+
+                        if time_beyond_sched >= 1.0:
+                            overtime = time_beyond_sched
+                            time_log.over_time = round(overtime, 2)
+                        else:
+                            time_log.over_time = 0.0
+
+                        # Calculate regular pay
+                        hourly_rate = time_log.daily_rate / 8
+                        regular_hours = min(hrs_rendered_for_pay, scheduled_hours)
+                        time_log.pay = round(hourly_rate * regular_hours, 2)
+
+                        # Calculate overtime pay (1.25x hourly rate)
+                        if time_log.over_time > 0:
+                            ot_hourly_rate = hourly_rate * 1.25
+                            time_log.ot_pay = round(ot_hourly_rate * time_log.over_time, 2)
+                        else:
+                            time_log.ot_pay = 0.0
+
+                    except Exception as e:
+                        # If schedule calculation fails, calculate simple hrs_rendered
+                        time_diff = time_log.time_out - time_log.time_in
+                        time_log.hrs_rendered = round(time_diff.total_seconds() / 3600, 2)
+                        time_log.over_time = 0.0
+                        time_log.pay = None
+                        time_log.ot_pay = 0.0
+                else:
+                    # No daily rate or schedule set
+                    time_diff = time_log.time_out - time_log.time_in
+                    time_log.hrs_rendered = round(time_diff.total_seconds() / 3600, 2)
+                    time_log.over_time = 0.0
+                    time_log.pay = None
+                    time_log.ot_pay = 0.0
+            else:
+                # No time_out yet, reset calculations
+                time_log.hrs_rendered = None
+                time_log.over_time = 0.0
+                time_log.pay = None
+                time_log.ot_pay = 0.0
+
+            db.session.commit()
+            flash('Time log updated successfully and recalculated!', 'success')
+            return redirect(url_for('time_logs'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating time log: {str(e)}', 'error')
+
+    return render_template('edit_time_log.html', time_log=time_log)
 
 # Scheduled Trips Report Route
 @app.route('/scheduled_trips_report')
