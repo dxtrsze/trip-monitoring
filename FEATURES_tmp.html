@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>FEATURES.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="trip-monitoring-system---features">Trip Monitoring - Features</h1>
+<h2 id="overview">Overview</h2>
+<p>A comprehensive web application for managing delivery schedules, tracking vehicle utilization, monitoring fuel efficiency, and managing logistics operations with role-based access control.</p>
+<hr>
+<h2 id="%F0%9F%9A%9A-core-operations">Core Operations</h2>
+<h3 id="delivery-schedule-management">Delivery Schedule Management</h3>
+<ul>
+<li><strong>Schedule Creation</strong>: Create multi-day delivery schedules with automatic date range support</li>
+<li><strong>Trip Management</strong>:
+<ul>
+<li>Assign multiple vehicles, drivers, and assistants per day</li>
+<li>Real-time vehicle editing capabilities</li>
+<li>Dynamic truck load utilization monitoring (CBM &amp; quantity)</li>
+<li>Automatic capacity utilization calculation with color-coded indicators</li>
+<li>Multi-stop delivery planning with branch-based grouping</li>
+</ul>
+</li>
+<li><strong>Delivery Order Optimization</strong>: Reordering of delivery stops per trip (1st stop, 2nd stop, etc.)</li>
+<li><strong>Real-time Status Tracking</strong>:
+<ul>
+<li>Track arrival/departure times at each location</li>
+<li>In/Out button interface for drivers/assistants</li>
+<li>Automatic status updates (Delivered, Cancelled, Not Scheduled)</li>
+</ul>
+</li>
+</ul>
+<h3 id="vehicle-management">Vehicle Management</h3>
+<ul>
+<li><strong>Vehicle Fleet Tracking</strong>:
+<ul>
+<li>Manage vehicle inventory with plate numbers</li>
+<li>Track vehicle capacity (CBM)</li>
+<li>Department classification (Logistics, Executive, Service)</li>
+<li>Active/Inactive status management</li>
+</ul>
+</li>
+<li><strong>Vehicle Assignment</strong>: Assign vehicles to specific trips with duplicate prevention</li>
+<li><strong>Vehicle Schedule Conflict Detection</strong>: Alert if vehicle is already scheduled</li>
+</ul>
+<h3 id="manpower-crew-management">Manpower (Crew) Management</h3>
+<ul>
+<li><strong>Driver &amp; Assistant Management</strong>:
+<ul>
+<li>Comprehensive personnel database</li>
+<li>Role-based assignment (Driver, Assistant, Executive, TeamLead)</li>
+<li>Link personnel to user accounts for time-tracking</li>
+</ul>
+</li>
+<li><strong>Crew Assignment</strong>:
+<ul>
+<li>Assign multiple drivers and assistants per trip</li>
+<li>Real-time crew editing capabilities</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="%F0%9F%93%8A-monitoring--tracking">Monitoring &amp; Tracking</h2>
+<h3 id="odometer--fuel-efficiency-tracking">Odometer &amp; Fuel Efficiency Tracking</h3>
+<ul>
+<li><strong>ODO Logging System</strong>:
+<ul>
+<li>Start ODO recording at trip beginning</li>
+<li>End ODO recording at trip completion</li>
+<li>Refill tracking (liters, amount, price per liter)</li>
+</ul>
+</li>
+<li><strong>Fuel Efficiency Monitoring</strong>:
+<ul>
+<li>Calculate total KM traveled per vehicle</li>
+<li>Track fuel consumption and costs</li>
+<li>Average price per liter calculations</li>
+<li>Department-based filtering (Logistics, Executive, Service)</li>
+</ul>
+</li>
+<li><strong>Executive Refill Logging</strong>: Separate refill tracking for executive vehicles</li>
+<li><strong>Comprehensive ODO Logs</strong>: View all ODO records with timestamps and user tracking</li>
+</ul>
+<h3 id="time-keeping--attendance">Time-Keeping &amp; Attendance</h3>
+<ul>
+<li><strong>User Time Tracking</strong>:
+<ul>
+<li>Time In/Time Out recording</li>
+<li>Automatic overtime calculation</li>
+<li>Daily schedule management (start/end times)</li>
+</ul>
+</li>
+<li><strong>Time Log Management</strong>:
+<ul>
+<li>Edit time logs for corrections</li>
+<li>View attendance history</li>
+<li>User-specific schedule tracking</li>
+</ul>
+</li>
+</ul>
+<h3 id="truck-load-utilization">Truck Load Utilization</h3>
+<ul>
+<li><strong>Capacity Monitoring</strong>:
+<ul>
+<li>Real-time CBM utilization percentage</li>
+<li>Color-coded utilization alerts:
+<ul>
+<li>Green: &ge;80% utilization (Good)</li>
+<li>Yellow: 50-79.9% utilization (Moderate)</li>
+<li>Red: &lt;50% utilization (Poor, including &gt;100% overcapacity)</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>Drop Count Tracking</strong>: Number of delivery stops per trip</li>
+<li><strong>Fleet Utilization Reports</strong>: Daily percentage of active trucks used</li>
+</ul>
+<h3 id="backload-management">Backload Management</h3>
+<ul>
+<li><strong>Backload Identification</strong>: Track undelivered quantities</li>
+<li><strong>Reason Tracking</strong>: Categorize reasons for non-delivery</li>
+<li><strong>Search &amp; Management</strong>: Search trip details and apply backload status</li>
+<li><strong>Comprehensive Reason Codes</strong>: 30+ predefined reasons including:
+<ul>
+<li>Branch-specific issues</li>
+<li>Vehicle concerns</li>
+<li>Documentation problems</li>
+<li>Weather conditions</li>
+<li>Unit concerns</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="%F0%9F%93%88-reporting--analytics">Reporting &amp; Analytics</h2>
+<h3 id="operational-reports">Operational Reports</h3>
+<ol>
+<li>
+<p><strong>Scheduled Trips Report</strong></p>
+<ul>
+<li>View all scheduled deliveries within date range</li>
+<li>Trip-level details with crew assignments</li>
+<li>Delivery order tracking</li>
+<li>Branch and quantity information</li>
+<li>CSV export functionality</li>
+</ul>
+</li>
+<li>
+<p><strong>Truck Load Utilization Report</strong></p>
+<ul>
+<li>Per-trip capacity vs. actual load analysis</li>
+<li>Utilization percentage calculations</li>
+<li>Number of drops per trip</li>
+<li>Identify underutilized or over capacity trips</li>
+</ul>
+</li>
+<li>
+<p><strong>Truck Fleet Utilization Report</strong></p>
+<ul>
+<li>Daily fleet usage metrics</li>
+<li>Percentage of active trucks deployed</li>
+<li>Track fleet efficiency over time</li>
+</ul>
+</li>
+<li>
+<p><strong>Fuel Efficiency Report</strong></p>
+<ul>
+<li>ODO records with comprehensive summary</li>
+<li>Fuel consumption analysis by vehicle</li>
+<li>Cost tracking and price per liter trends</li>
+<li>Filter by vehicle and department</li>
+</ul>
+</li>
+<li>
+<p><strong>Frequency Rate Report</strong></p>
+<ul>
+<li>Delivery frequency by area/branch</li>
+<li>Ranking of most frequently served locations</li>
+<li>Support for route optimization decisions</li>
+</ul>
+</li>
+<li>
+<p><strong>DIFOT Report</strong> (Delivery In Full, On Time)</p>
+<ul>
+<li>On-time delivery tracking</li>
+<li>In-full delivery monitoring</li>
+<li>Days late/early calculations</li>
+<li>Identify delivery performance issues</li>
+</ul>
+</li>
+</ol>
+<h3 id="automated-reports">Automated Reports</h3>
+<ul>
+<li><strong>Daily Vehicle Count</strong>: Automated daily tracking of active vehicle count
+<ul>
+<li>Scheduled execution at 5:00 AM Manila Time</li>
+<li>Historical tracking and trend analysis</li>
+<li>Edit capability for manual adjustments</li>
+</ul>
+</li>
+<li><strong>CSV Export</strong>: All reports support CSV export for external analysis</li>
+</ul>
+<hr>
+<h2 id="%F0%9F%97%82%EF%B8%8F-data-management">Data Management</h2>
+<h3 id="deliveriesdata-management">Deliveries/Data Management</h3>
+<ul>
+<li><strong>CSV Upload</strong>: Bulk upload shipment data</li>
+<li><strong>Data Editing</strong>: Modify shipment details</li>
+<li><strong>Soft Delete</strong>: Retain records with deletion tracking
+<ul>
+<li>Reason codes for deletion</li>
+<li>Detailed remarks for audit trail</li>
+</ul>
+</li>
+<li><strong>Search &amp; Filter</strong>: Advanced search capabilities</li>
+<li><strong>Template Download</strong>: CSV template for data entry</li>
+</ul>
+<h3 id="lcl-management">LCL Management</h3>
+<ul>
+<li><strong>LCL Upload</strong>: Bulk upload LCL shipment data</li>
+<li><strong>LCL Summary</strong>: Track LCL shipments by posting date and company</li>
+<li><strong>LCL Details</strong>: View individual LCL shipment records</li>
+<li><strong>SAP/ISMS Integration</strong>: Track upload dates from multiple systems</li>
+<li><strong>Department Filtering</strong>: View by LOGISTICS or TEAMLEAD</li>
+</ul>
+<h3 id="cluster-management">Cluster Management</h3>
+<ul>
+<li><strong>Cluster Database</strong>: Manage delivery clusters/areas</li>
+<li><strong>Cluster Assignment</strong>: Assign shipments to specific clusters</li>
+<li><strong>Weekly Schedule Tracking</strong>: Per-cluster delivery schedules</li>
+<li><strong>Delivery Personnel Tracking</strong>: Track who delivers to each cluster</li>
+<li><strong>Bulk Upload</strong>: CSV upload for cluster data</li>
+</ul>
+<hr>
+<h2 id="%F0%9F%91%A5-user-management--security">User Management &amp; Security</h2>
+<h3 id="user-administration">User Administration</h3>
+<ul>
+<li><strong>Role-Based Access Control</strong>:
+<ul>
+<li><strong>Admin</strong>: Full system access</li>
+<li><strong>Executive</strong>: Limited to refill logging and view schedules</li>
+<li><strong>TeamLead</strong>: Middle management access</li>
+<li><strong>User</strong>: Basic access for assigned operations</li>
+</ul>
+</li>
+<li><strong>User Management</strong>:
+<ul>
+<li>Create, edit, delete users</li>
+<li>Password management with secure reset</li>
+<li>Individual password reset with auto-generation</li>
+<li>Bulk password reset for all users (position='user')</li>
+<li>User credential CSV export</li>
+</ul>
+</li>
+<li><strong>Payroll Integration</strong>:
+<ul>
+<li>Daily rate tracking per user</li>
+<li>Schedule management (work hours)</li>
+<li>Default values for new users</li>
+</ul>
+</li>
+</ul>
+<h3 id="authentication--security">Authentication &amp; Security</h3>
+<ul>
+<li><strong>Secure Login</strong>: Password-protected access</li>
+<li><strong>Session Management</strong>: Login/logout functionality</li>
+<li><strong>Password Security</strong>: Hashed password storage</li>
+<li><strong>Access Control</strong>: Route-level permission checks</li>
+</ul>
+<hr>
+<h2 id="%F0%9F%94%A7-advanced-features">Advanced Features</h2>
+<h3 id="real-time-features">Real-time Features</h3>
+<ul>
+<li><strong>AJAX-powered Interface</strong>: Dynamic content updates without page reload</li>
+<li><strong>Live Status Updates</strong>: Real-time trip status changes</li>
+<li><strong>Conflict Detection</strong>: Immediate feedback on scheduling conflicts</li>
+<li><strong>Dynamic Dropdowns</strong>: Context-aware form options</li>
+</ul>
+<h3 id="data-caching">Data Caching</h3>
+<ul>
+<li><strong>Performance Optimization</strong>: Cached queries for vehicles and manpower</li>
+<li><strong>Automatic Cache Invalidation</strong>: Smart cache management</li>
+</ul>
+<h3 id="scheduled-tasks">Scheduled Tasks</h3>
+<ul>
+<li><strong>Automated Daily Tasks</strong>: APScheduler for background jobs</li>
+<li><strong>Vehicle Count Scheduler</strong>: Daily automated vehicle count</li>
+<li><strong>Configurable Schedule Times</strong>: Manila Timezone (Asia/Manila) support</li>
+</ul>
+<h3 id="search--filtering">Search &amp; Filtering</h3>
+<ul>
+<li><strong>Advanced Search</strong>: Search across trip details, data records, backloads</li>
+<li><strong>Multi-criteria Filtering</strong>: Filter by date, status, vehicle, department</li>
+<li><strong>Real-time Search</strong>: Instant search results as you type</li>
+</ul>
+<hr>
+<h2 id="%F0%9F%93%8B-data-models">Data Models</h2>
+<h3 id="core-entities">Core Entities</h3>
+<ul>
+<li><strong>Vehicle</strong>: Fleet management with department classification</li>
+<li><strong>Manpower</strong>: Drivers and assistants</li>
+<li><strong>User</strong>: System users with role-based access</li>
+<li><strong>Schedule</strong>: Delivery schedule management</li>
+<li><strong>Trip</strong>: Individual trips within schedules</li>
+<li><strong>TripDetail</strong>: Delivery stops within trips</li>
+<li><strong>Data</strong>: Shipment/delivery data</li>
+<li><strong>Cluster</strong>: Delivery area/cluster management</li>
+<li><strong>Odo</strong>: Odometer and fuel tracking</li>
+<li><strong>TimeLog</strong>: User time and attendance</li>
+<li><strong>DailyVehicleCount</strong>: Automated daily metrics</li>
+<li><strong>Backload</strong>: Undelivered quantity tracking</li>
+<li><strong>LCLSummary/LCLDetail</strong>: Less-than-container-load management</li>
+</ul>
+<hr>
+<h2 id="%F0%9F%93%9D-system-configuration">System Configuration</h2>
+<ul>
+<li><strong>Scheduling</strong>: APScheduler for automated tasks</li>
+<li><strong>Timezone</strong>: Asia/Manila (Philippines)</li>
+<li><strong>Default Values</strong>:
+<ul>
+<li>Daily Rate: ₱0.0</li>
+<li>Schedule Start: 08:00</li>
+<li>Schedule End: 18:00</li>
+<li>Default Date: Tomorrow (for schedule creation)</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="%F0%9F%93%8A-reports-summary">Reports Summary</h2>
+<table>
+<thead>
+<tr>
+<th>Report</th>
+<th>Description</th>
+<th>Export</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Scheduled Trips</td>
+<td>All scheduled deliveries by date range</td>
+<td>CSV</td>
+</tr>
+<tr>
+<td>Truck Load Utilization</td>
+<td>Capacity vs actual load per trip</td>
+<td>CSV</td>
+</tr>
+<tr>
+<td>Fleet Utilization</td>
+<td>Daily truck deployment metrics</td>
+<td>CSV</td>
+</tr>
+<tr>
+<td>Fuel Efficiency</td>
+<td>ODO records and fuel consumption</td>
+<td>CSV</td>
+</tr>
+<tr>
+<td>Frequency Rate</td>
+<td>Delivery frequency by area</td>
+<td>CSV</td>
+</tr>
+<tr>
+<td>DIFOT</td>
+<td>On-time &amp; in-full delivery performance</td>
+<td>CSV</td>
+</tr>
+<tr>
+<td>Daily Vehicle Counts</td>
+<td>Automated daily active vehicle count</td>
+<td>CSV</td>
+</tr>
+<tr>
+<td>User Credentials</td>
+<td>User list with generated passwords</td>
+<td>CSV</td>
+</tr>
+</tbody>
+</table>
+<hr>
+
+</body>
+</html>

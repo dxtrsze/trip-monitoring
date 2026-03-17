@@ -178,6 +178,8 @@
                             <option value="">Select position</option>
                             <option value="admin">Admin</option>
                             <option value="user">User</option>
+                            <option value="executive">Executive</option>
+                            <option value="teamlead">TeamLead</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -189,17 +191,17 @@
                     </div>
                     <div class="mb-3">
                         <label for="daily_rate" class="form-label">Daily Rate (₱)</label>
-                        <input type="number" class="form-control" id="daily_rate" name="daily_rate" step="0.01" min="0" placeholder="">
+                        <input type="number" class="form-control" id="daily_rate" name="daily_rate" step="0.01" min="0" placeholder="" value="0.0">
                         <div class="form-text">Optional: Daily rate for payroll calculations</div>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="sched_start" class="form-label">Schedule Start</label>
-                            <input type="time" class="form-control" id="sched_start" name="sched_start">
+                            <input type="time" class="form-control" id="sched_start" name="sched_start" value="08:00">
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="sched_end" class="form-label">Schedule End</label>
-                            <input type="time" class="form-control" id="sched_end" name="sched_end">
+                            <input type="time" class="form-control" id="sched_end" name="sched_end" value="18:00">
                         </div>
                     </div>
                 </div>

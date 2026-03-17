@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+
+{% block title %}Edit LCL Summary - Trip Monitoring System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Edit LCL Summary</h1>
+    <a href="{{ url_for('view_lcl_summary') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Summary
+    </a>
+</div>
+
+<form method="post">
+    <!-- Section 1: Core Information (Read-only) -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0">Core Information (Read-only)</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <label for="id" class="form-label">Summary ID</label>
+                    <input type="text" class="form-control" id="id" value="{{ summary.id }}" readonly>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="posting_date" class="form-label">Posting Date</label>
+                    <input type="date" class="form-control" id="posting_date" value="{{ summary.posting_date.strftime('%Y-%m-%d') if summary.posting_date else '' }}" readonly>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="company" class="form-label">Company</label>
+                    <input type="text" class="form-control" id="company" value="{{ summary.company }}" readonly>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="dept" class="form-label">Department</label>
+                    <input type="text" class="form-control" id="dept" value="{{ summary.dept }}" readonly>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label for="branch_name" class="form-label">Branch Name</label>
+                    <input type="text" class="form-control" id="branch_name" value="{{ summary.branch_name }}" readonly>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 2: Quantities and Measurements -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0">Quantities and Measurements</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <label for="tot_qty" class="form-label">Total Quantity</label>
+                    <input type="number" class="form-control" id="tot_qty" name="tot_qty" value="{{ summary.tot_qty }}" required min="0">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="tot_cbm" class="form-label">Total CBM</label>
+                    <input type="number" step="0.01" class="form-control" id="tot_cbm" name="tot_cbm" value="{{ summary.tot_cbm }}" required min="0">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="tot_boxes" class="form-label">Total Boxes</label>
+                    <input type="number" class="form-control" id="tot_boxes" name="tot_boxes" value="{{ summary.tot_boxes or '' }}" min="0">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="total_kg" class="form-label">Total KG</label>
+                    <input type="number" step="0.01" class="form-control" id="total_kg" name="total_kg" value="{{ summary.total_kg or '' }}" min="0">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="length_width_height" class="form-label">Length x Width x Height</label>
+                    <input type="text" class="form-control" id="length_width_height" name="length_width_height" value="{{ summary.length_width_height or '' }}" placeholder="e.g., 100x50x50 cm">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="declared_value" class="form-label">Declared Value</label>
+                    <input type="number" step="0.01" class="form-control" id="declared_value" name="declared_value" value="{{ summary.declared_value or '' }}" min="0">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 3: Shipping Information -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0">Shipping Information</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="waybill_no" class="form-label">Waybill No.</label>
+                    <input type="text" class="form-control" id="waybill_no" name="waybill_no" value="{{ summary.waybill_no or '' }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="pl_3pl" class="form-label">3PL</label>
+                    <input type="text" class="form-control" id="pl_3pl" name="pl_3pl" value="{{ summary.pl_3pl or '' }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="shipping_line" class="form-label">Shipping Line</label>
+                    <input type="text" class="form-control" id="shipping_line" name="shipping_line" value="{{ summary.shipping_line or '' }}">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="container_no" class="form-label">Container No.</label>
+                    <input type="text" class="form-control" id="container_no" name="container_no" value="{{ summary.container_no or '' }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="seal_no" class="form-label">Seal No.</label>
+                    <input type="text" class="form-control" id="seal_no" name="seal_no" value="{{ summary.seal_no or '' }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="port_of_destination" class="form-label">Port of Destination</label>
+                    <input type="text" class="form-control" id="port_of_destination" name="port_of_destination" value="{{ summary.port_of_destination or '' }}">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="freight_category" class="form-label">Freight Category</label>
+                    <select class="form-select" id="freight_category" name="freight_category">
+                        <option value="">Select category</option>
+                        <option value="AIR" {% if summary.freight_category == 'AIR' %}selected{% endif %}>AIR</option>
+                        <option value="SEA" {% if summary.freight_category == 'SEA' %}selected{% endif %}>SEA</option>
+                        <option value="LAND" {% if summary.freight_category == 'LAND' %}selected{% endif %}>LAND</option>
+                        <option value="RAIL" {% if summary.freight_category == 'RAIL' %}selected{% endif %}>RAIL</option>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="ref_docs" class="form-label">Reference Documents</label>
+                    <input type="text" class="form-control" id="ref_docs" name="ref_docs" value="{{ summary.ref_docs or '' }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 4: Dates and Timeline -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0">Dates and Timeline</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="prep_date" class="form-label">Preparation Date</label>
+                    <input type="date" class="form-control" id="prep_date" name="prep_date" value="{{ summary.prep_date.strftime('%Y-%m-%d') if summary.prep_date else '' }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="order_date" class="form-label">Order Date</label>
+                    <input type="date" class="form-control" id="order_date" name="order_date" value="{{ summary.order_date.strftime('%Y-%m-%d') if summary.order_date else '' }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="booked_date" class="form-label">Booked Date</label>
+                    <input type="date" class="form-control" id="booked_date" name="booked_date" value="{{ summary.booked_date.strftime('%Y-%m-%d') if summary.booked_date else '' }}">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="actual_pickup_date" class="form-label">Actual Pickup Date</label>
+                    <input type="date" class="form-control" id="actual_pickup_date" name="actual_pickup_date" value="{{ summary.actual_pickup_date.strftime('%Y-%m-%d') if summary.actual_pickup_date else '' }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="etd" class="form-label">ETD (Estimated Time of Departure)</label>
+                    <input type="date" class="form-control" id="etd" name="etd" value="{{ summary.etd.strftime('%Y-%m-%d') if summary.etd else '' }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="atd" class="form-label">ATD (Actual Time of Departure)</label>
+                    <input type="date" class="form-control" id="atd" name="atd" value="{{ summary.atd.strftime('%Y-%m-%d') if summary.atd else '' }}">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="eta" class="form-label">ETA (Estimated Time of Arrival)</label>
+                    <input type="date" class="form-control" id="eta" name="eta" value="{{ summary.eta.strftime('%Y-%m-%d') if summary.eta else '' }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="ata" class="form-label">ATA (Actual Time of Arrival)</label>
+                    <input type="date" class="form-control" id="ata" name="ata" value="{{ summary.ata.strftime('%Y-%m-%d') if summary.ata else '' }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="actual_delivered_date" class="form-label">Actual Delivered Date</label>
+                    <input type="date" class="form-control" id="actual_delivered_date" name="actual_delivered_date" value="{{ summary.actual_delivered_date.strftime('%Y-%m-%d') if summary.actual_delivered_date else '' }}">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="received_by" class="form-label">Received By</label>
+                    <input type="text" class="form-control" id="received_by" name="received_by" value="{{ summary.received_by or '' }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="team_lead" class="form-label">Team Lead</label>
+                    <input type="text" class="form-control" id="team_lead" name="team_lead" value="{{ summary.team_lead or '' }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 5: Financial Information -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0">Financial Information</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="freight_charge" class="form-label">Freight Charge</label>
+                    <input type="number" step="0.01" class="form-control" id="freight_charge" name="freight_charge" value="{{ summary.freight_charge or '' }}" min="0">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="total_freight_charge" class="form-label">Total Freight Charge</label>
+                    <input type="number" step="0.01" class="form-control" id="total_freight_charge" name="total_freight_charge" value="{{ summary.total_freight_charge or '' }}" min="0">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="billing_date" class="form-label">Billing Date</label>
+                    <input type="date" class="form-control" id="billing_date" name="billing_date" value="{{ summary.billing_date.strftime('%Y-%m-%d') if summary.billing_date else '' }}">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="billing_no" class="form-label">Billing No.</label>
+                    <input type="text" class="form-control" id="billing_no" name="billing_no" value="{{ summary.billing_no or '' }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="billing_status" class="form-label">Billing Status</label>
+                    <select class="form-select" id="billing_status" name="billing_status">
+                        <option value="">Select status</option>
+                        <option value="PENDING" {% if summary.billing_status == 'PENDING' %}selected{% endif %}>PENDING</option>
+                        <option value="PAID" {% if summary.billing_status == 'PAID' %}selected{% endif %}>PAID</option>
+                        <option value="OVERDUE" {% if summary.billing_status == 'OVERDUE' %}selected{% endif %}>OVERDUE</option>
+                        <option value="CANCELLED" {% if summary.billing_status == 'CANCELLED' %}selected{% endif %}>CANCELLED</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 6: Status and Metrics -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0">Status and Metrics</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-select" id="status" name="status">
+                        <option value="">Select status</option>
+                        <option value="PENDING" {% if summary.status == 'PENDING' %}selected{% endif %}>PENDING</option>
+                        <option value="IN TRANSIT" {% if summary.status == 'IN TRANSIT' %}selected{% endif %}>IN TRANSIT</option>
+                        <option value="DELIVERED" {% if summary.status == 'DELIVERED' %}selected{% endif %}>DELIVERED</option>
+                        <option value="CANCELLED" {% if summary.status == 'CANCELLED' %}selected{% endif %}>CANCELLED</option>
+                        <option value="ON HOLD" {% if summary.status == 'ON HOLD' %}selected{% endif %}>ON HOLD</option>
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="year" class="form-label">Year</label>
+                    <input type="number" class="form-control" id="year" name="year" value="{{ summary.year or '' }}" min="2000" max="2100">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="pick_up_month" class="form-label">Pick-up Month</label>
+                    <select class="form-select" id="pick_up_month" name="pick_up_month">
+                        <option value="">Select month</option>
+                        <option value="January" {% if summary.pick_up_month == 'January' %}selected{% endif %}>January</option>
+                        <option value="February" {% if summary.pick_up_month == 'February' %}selected{% endif %}>February</option>
+                        <option value="March" {% if summary.pick_up_month == 'March' %}selected{% endif %}>March</option>
+                        <option value="April" {% if summary.pick_up_month == 'April' %}selected{% endif %}>April</option>
+                        <option value="May" {% if summary.pick_up_month == 'May' %}selected{% endif %}>May</option>
+                        <option value="June" {% if summary.pick_up_month == 'June' %}selected{% endif %}>June</option>
+                        <option value="July" {% if summary.pick_up_month == 'July' %}selected{% endif %}>July</option>
+                        <option value="August" {% if summary.pick_up_month == 'August' %}selected{% endif %}>August</option>
+                        <option value="September" {% if summary.pick_up_month == 'September' %}selected{% endif %}>September</option>
+                        <option value="October" {% if summary.pick_up_month == 'October' %}selected{% endif %}>October</option>
+                        <option value="November" {% if summary.pick_up_month == 'November' %}selected{% endif %}>November</option>
+                        <option value="December" {% if summary.pick_up_month == 'December' %}selected{% endif %}>December</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="actual_delivery_leadtime" class="form-label">Delivery Leadtime (Days)</label>
+                    <input type="number" class="form-control" id="actual_delivery_leadtime" name="actual_delivery_leadtime" value="{{ summary.actual_delivery_leadtime or '' }}" min="0">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="received_date_to_pick_up_date" class="form-label">Received to Pickup (Days)</label>
+                    <input type="number" class="form-control" id="received_date_to_pick_up_date" name="received_date_to_pick_up_date" value="{{ summary.received_date_to_pick_up_date or '' }}" min="0">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 7: Remarks -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0">Remarks</h5>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label for="remarks" class="form-label">Remarks</label>
+                <textarea class="form-control" id="remarks" name="remarks" rows="2">{{ summary.remarks or '' }}</textarea>
+            </div>
+            <div class="mb-3">
+                <label for="detailed_remarks" class="form-label">Detailed Remarks</label>
+                <textarea class="form-control" id="detailed_remarks" name="detailed_remarks" rows="4" placeholder="Enter detailed explanation...">{{ summary.detailed_remarks or '' }}</textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between">
+                <a href="{{ url_for('view_lcl_summary') }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Record Metadata</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <p class="mb-1"><strong>Created:</strong> {{ summary.created_at.strftime('%Y-%m-%d %H:%M:%S') if summary.created_at else 'N/A' }}</p>
+            </div>
+            <div class="col-md-6">
+                <p class="mb-1"><strong>Last Updated:</strong> {{ summary.updated_at.strftime('%Y-%m-%d %H:%M:%S') if summary.updated_at else 'N/A' }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

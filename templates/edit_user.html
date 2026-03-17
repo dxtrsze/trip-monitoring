@@ -28,6 +28,8 @@
                         <option value="">Select position</option>
                         <option value="admin" {% if user.position == 'admin' %}selected{% endif %}>Admin</option>
                         <option value="user" {% if user.position == 'user' %}selected{% endif %}>User</option>
+                        <option value="executive" {% if user.position == 'executive' %}selected{% endif %}>Executive</option>
+                        <option value="teamlead" {% if user.position == 'teamlead' %}selected{% endif %}>TeamLead</option>
                     </select>
                 </div>
                 <div class="col-md-6 mb-3">
@@ -41,16 +43,16 @@
             <div class="row">
                 <div class="col-md-4 mb-3">
                     <label for="daily_rate" class="form-label">Daily Rate (₱)</label>
-                    <input type="number" class="form-control" id="daily_rate" name="daily_rate" step="0.01" min="0" value="{{ user.daily_rate or '' }}" placeholder="">
+                    <input type="number" class="form-control" id="daily_rate" name="daily_rate" step="0.01" min="0" value="{{ user.daily_rate or 0.0 }}" placeholder="0.0">
                     <div class="form-text">Daily rate for payroll calculations</div>
                 </div>
                 <div class="col-md-4 mb-3">
                     <label for="sched_start" class="form-label">Schedule Start</label>
-                    <input type="time" class="form-control" id="sched_start" name="sched_start" value="{{ user.sched_start or '' }}">
+                    <input type="time" class="form-control" id="sched_start" name="sched_start" value="{{ user.sched_start or '08:00' }}">
                 </div>
                 <div class="col-md-4 mb-3">
                     <label for="sched_end" class="form-label">Schedule End</label>
-                    <input type="time" class="form-control" id="sched_end" name="sched_end" value="{{ user.sched_end or '' }}">
+                    <input type="time" class="form-control" id="sched_end" name="sched_end" value="{{ user.sched_end or '18:00' }}">
                 </div>
             </div>
             <div class="mb-3">

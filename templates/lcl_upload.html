@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Serialized LCL - Trip Monitoring System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Upload Serialized LCL Data</h1>
+    <a href="{{ url_for('download_lcl_template') }}" class="btn btn-outline-primary">
+        <i class="bi bi-download"></i> Download Template
+    </a>
+</div>
+
+<div class="card mt-4">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="file" class="form-label">Select CSV File</label>
+                <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
+                <div class="form-text">
+                    Upload a CSV file containing serialized LCL records. Use the template to ensure correct format.
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Upload</button>
+            <a href="{{ url_for('view_lcl_details') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5>CSV Format Requirements</h5>
+    </div>
+    <div class="card-body">
+        <p>Your CSV file must include the following <strong>exact column headers</strong> (case-sensitive):</p>
+        <ul>
+            <li><code>SAP Upload Date</code> – in <code>YYYY-MM-DD</code> format (required)</li>
+            <li><code>ISMS Upload Date</code> – in <code>YYYY-MM-DD</code> format (optional)</li>
+            <li><code>Delivery Date</code> – in <code>YYYY-MM-DD</code> format (optional)</li>
+            <li><code>Doc Type</code> – e.g., "DR" (optional)</li>
+            <li><code>DR Number</code> (optional)</li>
+            <li><code>Customer Name</code> – Branch/customer name (required)</li>
+            <li><code>Qty</code> – Quantity (required)</li>
+            <li><code>From Whse</code> – From warehouse (optional)</li>
+            <li><code>To Whse</code> – To warehouse (optional)</li>
+            <li><code>Model</code> – Product model (optional)</li>
+            <li><code>Serial Number</code> – Unique serial number (required)</li>
+            <li><code>ITR SO</code> – ITR/SO number (optional)</li>
+            <li><code>DR IT</code> – DR/IT reference (optional)</li>
+            <li><code>CBM</code> – Cubic meters (required)</li>
+        </ul>
+        <p class="text-muted">
+            ⚠️ <strong>Important:</strong> Use the <a href="{{ url_for('download_lcl_template') }}">downloadable template</a> to avoid formatting errors.
+        </p>
+        <p class="text-info">
+            ✅ <strong>Duplicate Prevention:</strong> Records are validated against existing data using the combination of <strong>SAP Upload Date</strong>, <strong>Customer Name</strong>, and <strong>Serial Number</strong>. Duplicate rows will be automatically skipped during upload.
+        </p>
+        <p class="text-success">
+            📊 <strong>Auto-Summary:</strong> Upon successful upload, LCL summary records will be automatically created or updated, aggregating quantity and CBM by SAP Upload Date and Customer Name.
+        </p>
+    </div>
+</div>
+{% endblock %}

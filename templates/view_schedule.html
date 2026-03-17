@@ -6,11 +6,72 @@
   <h1>Delivery Schedules</h1>
   <div>
     {% if current_user.position == 'admin' %}
-    <a href="{{ url_for('odo_logs') }}" class="btn btn-info me-2">View Odo Logs</a>
-    <a href="{{ url_for('add_schedule') }}" class="btn btn-primary">+ New Schedule</a>
+    <a href="{{ url_for('odo_logs') }}" class="btn btn-info me-2" style="color: #1A535C;">View Odo Logs</a>
+    <a href="{{ url_for('add_schedule') }}" class="btn btn-primary" style="color: #1A535C;">+ New Schedule</a>
     {% endif %}
   </div>
 </div>
+
+{% if current_user.position == 'executive' %}
+<div class="card mb-4">
+  <div class="card-header">
+    <h6 class="mb-0"><i class="bi bi-fuel-pump"></i> Quick Refill Log</h6>
+  </div>
+  <div class="card-body">
+    {% if executive_vehicles and executive_vehicles|length > 0 %}
+    <form id="executiveRefillForm">
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <label for="plateNumber" class="form-label">Plate Number</label>
+          <select class="form-select" id="plateNumber" name="plateNumber" required>
+            <option value="" selected disabled>Select plate number...</option>
+            {% for vehicle in executive_vehicles %}
+            <option value="{{ vehicle.plate_number }}">{{ vehicle.plate_number }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label for="execStartOdo" class="form-label">Start Odo</label>
+          <div class="input-group">
+            <input type="number" class="form-control" id="execStartOdo" name="execStartOdo" placeholder="0" step="0.1">
+            <button class="btn btn-outline-success" type="button" onclick="recordExecutiveOdo('start odo')">Submit</button>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label for="execEndOdo" class="form-label">End Odo</label>
+          <div class="input-group">
+            <input type="number" class="form-control" id="execEndOdo" name="execEndOdo" placeholder="0" step="0.1">
+            <button class="btn btn-outline-danger" type="button" onclick="recordExecutiveOdo('end odo')">Submit</button>
+          </div>
+        </div>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label for="execRefillOdo" class="form-label">Refill Odo</label>
+          <input type="number" class="form-control" id="execRefillOdo" name="execRefillOdo" placeholder="Odo" step="0.1">
+        </div>
+        <div class="col-md-3">
+          <label for="execRefillLiters" class="form-label">Liters</label>
+          <input type="number" class="form-control" id="execRefillLiters" name="execRefillLiters" placeholder="Liters" step="0.1">
+        </div>
+        <div class="col-md-3">
+          <label for="execRefillAmount" class="form-label">Amount</label>
+          <input type="number" class="form-control" id="execRefillAmount" name="execRefillAmount" placeholder="Amount" step="0.01">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">&nbsp;</label>
+          <button class="btn btn-outline-primary w-100" type="button" onclick="recordExecutiveOdo('refill odo')">Submit Refill</button>
+        </div>
+      </div>
+    </form>
+    {% else %}
+    <div class="alert alert-warning mb-0">
+      <i class="bi bi-exclamation-triangle"></i> No active Executive vehicles found. Please contact the administrator to add vehicles to the Executive department.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 
 {% for schedule in schedules %}
   {# Check if schedule has incomplete trips (any trip_detail with NULL departure) #}
@@ -64,14 +125,12 @@
             <span class="badge bg-secondary">CBM: {{ "%.2f"|format(trip.total_cbm) }}</span>
             {% if trip.vehicle.capacity %}
             {% set utilization = (trip.total_cbm / trip.vehicle.capacity * 100) %}
-            {% if utilization > 100 %}
-            <span class="badge bg-danger fw-bold">Utilization: {{ "%.1f"|format(utilization) }}%</span>
-            {% elif utilization > 90 %}
-            <span class="badge bg-warning fw-bold">Utilization: {{ "%.1f"|format(utilization) }}%</span>
-            {% elif utilization > 75 %}
+            {% if utilization >= 80 %}
             <span class="badge bg-success">Utilization: {{ "%.1f"|format(utilization) }}%</span>
+            {% elif utilization >= 50 %}
+            <span class="badge bg-warning">Utilization: {{ "%.1f"|format(utilization) }}%</span>
             {% else %}
-            <span class="badge bg-info">Utilization: {{ "%.1f"|format(utilization) }}%</span>
+            <span class="badge bg-danger">Utilization: {{ "%.1f"|format(utilization) }}%</span>
             {% endif %}
             {% else %}
             <span class="badge bg-secondary">No capacity set</span>
@@ -81,6 +140,9 @@
           <div class="btn-group btn-group-sm" role="group">
             <button type="button" class="btn btn-sm btn-warning btn-edit-trip" data-trip-id="{{ trip.id }}" data-schedule-id="{{ schedule.id }}" data-delivery-date="{{ schedule.delivery_schedule.strftime('%Y-%m-%d') }}">
               Edit Trip
+            </button>
+            <button type="button" class="btn btn-sm btn-primary btn-edit-vehicle" data-trip-id="{{ trip.id }}" data-current-vehicle="{{ trip.vehicle.id }}">
+              Edit Vehicle
             </button>
             <button type="button" class="btn btn-sm btn-info btn-edit-crew" data-trip-id="{{ trip.id }}">
               Edit Crew
@@ -174,7 +236,7 @@
                   {% if detail.status == "Delivered" %}
                   <div class="btn-group btn-group-sm" role="group">
                     <button type="button" class="btn btn-sm btn-success btn-record-arrival" {% if detail.arrive %}disabled{% endif %}>In</button>
-                    <button type="button" class="btn btn-sm btn-primary btn-record-departure" {% if detail.departure %}disabled{% endif %}>Out</button>
+                    <button type="button" class="btn btn-sm btn-warning btn-record-departure" {% if detail.departure %}disabled{% endif %}>Out</button>
                     {% if current_user.position == 'admin' %}
                     <button type="button" class="btn btn-sm btn-danger btn-cancel-trip">Cancel</button>
                     {% endif %}
@@ -186,8 +248,8 @@
                   {% endif %}
                 </td>
                 <td>
-                  <select class="form-select form-select-sm" id="remarks_{{ detail.id }}" name="remarks">
-                    <option value="">Select remark...</option>
+                  <select class="form-select form-select-sm" id="remarks_{{ detail.id }}" name="remarks" style="font-size: 12px;">
+                    <option value="">Select remark</option>
                     <option value="3PL CONCERN" {% if detail.reason == '3PL CONCERN' %}selected{% endif %}>3PL CONCERN</option>
                     <option value="BARCODE CONCERN" {% if detail.reason == 'BARCODE CONCERN' %}selected{% endif %}>BARCODE CONCERN</option>
                     <option value="BRANCH'S DELIVERY CUT-OFF TIME" {% if detail.reason == 'BRANCH\'S DELIVERY CUT-OFF TIME' %}selected{% endif %}>BRANCH'S DELIVERY CUT-OFF TIME</option>
@@ -222,7 +284,7 @@
                   </select>
                 </td>
                 <td>
-                  <input type="text" class="form-control form-control-sm" id="reason_{{ detail.id }}" placeholder="Reason (optional)" value="{{ detail.reason or '' }}">
+                  <textarea class="form-control" id="reason_{{ detail.id }}" name="reason" rows="3" placeholder="Reason (optional)" style="min-width: 250px; font-size: 12px;">{{ detail.reason or '' }}</textarea>
                 </td>
               </tr>
               {% endfor %}
@@ -420,6 +482,42 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-primary" id="btnSaveTime">Save Times</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Vehicle Modal -->
+<div class="modal fade" id="editVehicleModal" tabindex="-1" aria-labelledby="editVehicleModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editVehicleModalLabel">Edit Trip Vehicle</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editVehicleForm">
+          <input type="hidden" id="editVehicleTripId" name="trip_id">
+          <div class="mb-3">
+            <label for="editVehicleSelect" class="form-label">Select Vehicle</label>
+            <select class="form-select" id="editVehicleSelect" name="vehicle_id" required>
+              <option value="">Select a vehicle...</option>
+              {% for v in vehicles %}
+              {% if v.status == 'Active' and v.dept == 'Logistics' %}
+              <option value="{{ v.id }}" data-capacity="{{ v.capacity or 0 }}">{{ v.plate_number }}{% if v.capacity %} ({{ v.capacity }} CBM){% endif %}</option>
+              {% endif %}
+              {% endfor %}
+            </select>
+            <div class="form-text">Only active Logistics vehicles are shown</div>
+          </div>
+          <div class="alert alert-info">
+            <strong>Note:</strong> Changing the vehicle will update the trip. Make sure to check the utilization after changing.
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnSaveVehicle">Save Vehicle</button>
       </div>
     </div>
   </div>
@@ -892,6 +990,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  // Event delegation for Edit Vehicle buttons
+  document.querySelectorAll('.btn-edit-vehicle').forEach(button => {
+    button.addEventListener('click', function() {
+      const tripId = this.getAttribute('data-trip-id');
+      const currentVehicleId = this.getAttribute('data-current-vehicle');
+      openEditVehicleModal(tripId, currentVehicleId);
+    });
+  });
+
   // Event delegation for Edit Crew buttons
   document.querySelectorAll('.btn-edit-crew').forEach(button => {
     button.addEventListener('click', function() {
@@ -910,6 +1017,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Event handler for Save Times button
   document.getElementById('btnSaveTime').addEventListener('click', saveTime);
+
+  // Event handler for Save Vehicle button
+  document.getElementById('btnSaveVehicle').addEventListener('click', saveVehicle);
 
   // Handle edit crew form submission
   editCrewForm.addEventListener('submit', function(e) {
@@ -956,6 +1066,15 @@ document.addEventListener('DOMContentLoaded', function() {
       alert('An error occurred while updating crew');
     });
   });
+
+  // Executive refill form submission handler
+  const executiveRefillForm = document.getElementById('executiveRefillForm');
+  if (executiveRefillForm) {
+    // Prevent default form submission
+    executiveRefillForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+    });
+  }
 });
 
 // Function to record odometer reading
@@ -1016,6 +1135,92 @@ function recordOdo(plateNumber, status, tripId) {
       if (status === 'refill odo') {
         const littersInput = document.getElementById('refill_litters_' + tripId);
         const amountInput = document.getElementById('refill_amount_' + tripId);
+        if (littersInput) littersInput.value = '';
+        if (amountInput) amountInput.value = '';
+      }
+    } else {
+      alert('Error recording odometer: ' + data.message);
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('An error occurred while recording odometer');
+  });
+}
+
+// Function to record executive odometer readings
+function recordExecutiveOdo(status) {
+  const plateNumberSelect = document.getElementById('plateNumber');
+  const plateNumber = plateNumberSelect ? plateNumberSelect.value : '';
+
+  if (!plateNumber) {
+    alert('Please select a plate number first');
+    return;
+  }
+
+  // Get the correct input field based on status
+  let inputId;
+  if (status === 'start odo') {
+    inputId = 'execStartOdo';
+  } else if (status === 'refill odo') {
+    inputId = 'execRefillOdo';
+  } else if (status === 'end odo') {
+    inputId = 'execEndOdo';
+  }
+
+  const input = document.getElementById(inputId);
+  const odometerReading = input ? input.value : '';
+
+  if (!odometerReading || isNaN(odometerReading)) {
+    alert('Please enter a valid odometer reading');
+    return;
+  }
+
+  // Prepare the request data
+  let requestData = {
+    plate_number: plateNumber,
+    odometer_reading: parseFloat(odometerReading),
+    status: status
+  };
+
+  // Add litters and amount for refill odo
+  if (status === 'refill odo') {
+    const littersInput = document.getElementById('execRefillLiters');
+    const amountInput = document.getElementById('execRefillAmount');
+    const litters = littersInput ? littersInput.value : '';
+    const amount = amountInput ? amountInput.value : '';
+
+    if (!litters || isNaN(litters)) {
+      alert('Please enter valid liters value');
+      return;
+    }
+
+    if (!amount || isNaN(amount)) {
+      alert('Please enter valid amount');
+      return;
+    }
+
+    requestData.litters = parseFloat(litters);
+    requestData.amount = parseFloat(amount);
+  }
+
+  // Send the odometer reading request
+  fetch('/record_odo', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestData)
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert(data.message);
+      // Clear the relevant input fields
+      if (input) input.value = '';
+      if (status === 'refill odo') {
+        const littersInput = document.getElementById('execRefillLiters');
+        const amountInput = document.getElementById('execRefillAmount');
         if (littersInput) littersInput.value = '';
         if (amountInput) amountInput.value = '';
       }
@@ -1253,6 +1458,63 @@ function addSelectedShipmentsToTrip() {
   .catch(error => {
     console.error('Error:', error);
     alert('An error occurred while adding shipments');
+  });
+}
+
+// Edit Vehicle Functionality
+let editVehicleModal = null;
+
+function openEditVehicleModal(tripId, currentVehicleId) {
+  document.getElementById('editVehicleTripId').value = tripId;
+
+  // Set the current vehicle in the dropdown
+  const vehicleSelect = document.getElementById('editVehicleSelect');
+  vehicleSelect.value = currentVehicleId;
+
+  // Initialize and show modal
+  if (!editVehicleModal) {
+    editVehicleModal = new bootstrap.Modal(document.getElementById('editVehicleModal'));
+  }
+  editVehicleModal.show();
+}
+
+function saveVehicle() {
+  const tripId = document.getElementById('editVehicleTripId').value;
+  const vehicleId = document.getElementById('editVehicleSelect').value;
+
+  if (!vehicleId) {
+    alert('Please select a vehicle');
+    return;
+  }
+
+  // Confirm before saving
+  if (!confirm('Are you sure you want to change the vehicle for this trip?')) {
+    return;
+  }
+
+  fetch('/update_trip_vehicle', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      trip_id: tripId,
+      vehicle_id: vehicleId
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert('Vehicle updated successfully!');
+      editVehicleModal.hide();
+      location.reload();
+    } else {
+      alert('Error updating vehicle: ' + data.message);
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('An error occurred while updating the vehicle');
   });
 }
 

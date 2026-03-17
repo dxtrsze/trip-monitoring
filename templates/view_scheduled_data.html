@@ -89,12 +89,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const searchTerm = searchInput.value.trim();
         const type = searchType.value;
 
-        if (!searchTerm) {
-            tableBody.innerHTML = '';
-            noResultsMessage.classList.add('d-none');
-            return;
-        }
-
+        // Remove the early return - allow empty search to load all data
         fetch(`/api/search_scheduled?search=${encodeURIComponent(searchTerm)}&type=${type}`)
             .then(response => response.json())
             .then(data => {

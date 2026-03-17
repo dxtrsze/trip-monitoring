@@ -119,12 +119,12 @@
               </select>
             </div>
             <div class="col-md-6">
-              <label for="fuelStatusFilter" class="form-label">Status (Optional)</label>
-              <select class="form-select" id="fuelStatusFilter">
-                <option value="">All Status</option>
-                <option value="start odo">Start Odo</option>
-                <option value="refill odo">Refill Odo</option>
-                <option value="end odo">End Odo</option>
+              <label for="fuelDeptFilter" class="form-label">Department (Optional)</label>
+              <select class="form-select" id="fuelDeptFilter">
+                <option value="">All Departments</option>
+                <option value="Logistics">Logistics</option>
+                <option value="Executive">Executive</option>
+                <option value="Service">Service</option>
               </select>
             </div>
           </div>
@@ -203,11 +203,11 @@
 
 <!-- Scheduled Report Results -->
 <div class="card mt-4" id="reportResults" style="display:none;">
-  <div class="card-header d-flex justify-content-between align-items-center">
+  <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
     <h5 id="reportTitle">Scheduled Trips Report</h5>
     <div>
       <span id="reportDateRange" class="me-3"></span>
-      <button type="button" class="btn btn-sm btn-success" id="exportBtn">
+      <button type="button" class="btn btn-sm btn-light" id="exportBtn">
         <i class="bi bi-file-earmark-excel"></i> Export CSV
       </button>
     </div>
@@ -453,7 +453,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const exportFuelBtn = document.getElementById('exportFuelBtn');
   const fuelDateRange = document.getElementById('fuelDateRange');
   const fuelVehicleFilter = document.getElementById('fuelVehicleFilter');
-  const fuelStatusFilter = document.getElementById('fuelStatusFilter');
+  const fuelDeptFilter = document.getElementById('fuelDeptFilter');
 
   // Frequency Rate Form
   const frequencyRateForm = document.getElementById('frequencyRateForm');
@@ -573,6 +573,9 @@ document.addEventListener('DOMContentLoaded', function() {
         displayTruckData(data);
         reportResults.style.display = 'none';
         fleetResults.style.display = 'none';
+        fuelResults.style.display = 'none';
+        frequencyResults.style.display = 'none';
+        difotResults.style.display = 'none';
       })
       .catch(error => {
         console.error('Error:', error);
@@ -609,6 +612,9 @@ document.addEventListener('DOMContentLoaded', function() {
         displayFleetData(data);
         reportResults.style.display = 'none';
         truckResults.style.display = 'none';
+        fuelResults.style.display = 'none';
+        frequencyResults.style.display = 'none';
+        difotResults.style.display = 'none';
       })
       .catch(error => {
         console.error('Error:', error);
@@ -623,7 +629,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const startDate = document.getElementById('fuelStartDate').value;
     const endDate = document.getElementById('fuelEndDate').value;
     const vehicle = document.getElementById('fuelVehicleFilter').value;
-    const status = document.getElementById('fuelStatusFilter').value;
+    const dept = document.getElementById('fuelDeptFilter').value;
 
     // Show date range in the report header
     const start = new Date(startDate).toLocaleDateString();
@@ -633,7 +639,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Build query parameters
     let url = `/fuel_efficiency_data?start_date=${startDate}&end_date=${endDate}`;
     if (vehicle) url += `&vehicle=${vehicle}`;
-    if (status) url += `&status=${status}`;
+    if (dept) url += `&dept=${dept}`;
 
     // Fetch ODO data
     fetch(url)
@@ -653,6 +659,8 @@ document.addEventListener('DOMContentLoaded', function() {
         reportResults.style.display = 'none';
         truckResults.style.display = 'none';
         fleetResults.style.display = 'none';
+        frequencyResults.style.display = 'none';
+        difotResults.style.display = 'none';
       })
       .catch(error => {
         console.error('Error:', error);
@@ -766,11 +774,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const startDate = document.getElementById('fuelStartDate').value;
     const endDate = document.getElementById('fuelEndDate').value;
     const vehicle = document.getElementById('fuelVehicleFilter').value;
-    const status = document.getElementById('fuelStatusFilter').value;
+    const dept = document.getElementById('fuelDeptFilter').value;
 
     let url = `/export_fuel_efficiency?start_date=${startDate}&end_date=${endDate}`;
     if (vehicle) url += `&vehicle=${vehicle}`;
-    if (status) url += `&status=${status}`;
+    if (dept) url += `&dept=${dept}`;
 
     window.location.href = url;
   });
@@ -845,7 +853,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Calculate utilization percentage
         const utilization = row.capacity > 0 ? (row.actual / row.capacity * 100).toFixed(1) : '0.0';
-        const utilizationClass = utilization >= 80 ? 'success' : utilization >= 50 ? 'warning' : 'danger';
+        const utilizationClass = (utilization >= 80 && utilization <= 100) ? 'success' : utilization >= 50 ? 'warning' : 'danger';
         const actualFormatted = parseFloat(row.actual || 0).toFixed(3);
         const branchCount = row.branch_count || 0;
 

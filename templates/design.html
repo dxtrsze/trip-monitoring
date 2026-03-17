@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>🐬 PDF Bubble - Playful PDF Rename</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --coral: #FF6B6B;
+            --coral-light: #FF8E8E;
+            --teal: #4ECDC4;
+            --teal-dark: #2E8B82;
+            --sunny: #FFE66D;
+            --sunny-light: #FFF3A3;
+            --deep-sea: #1A535C;
+            --bubble-white: #F7FFF7;
+            --pink-pop: #FF6B9D;
+            --purple-splash: #9B5DE5;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, var(--deep-sea) 0%, var(--teal-dark) 50%, var(--purple-splash) 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Animated background blobs */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background:
+                radial-gradient(circle at 20% 80%, rgba(255, 107, 107, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 230, 109, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(78, 205, 196, 0.2) 0%, transparent 40%),
+                radial-gradient(circle at 60% 60%, rgba(155, 93, 229, 0.15) 0%, transparent 40%);
+            animation: float 20s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(2%, 2%) rotate(1deg); }
+            50% { transform: translate(-1%, 3%) rotate(-1deg); }
+            75% { transform: translate(3%, -2%) rotate(2deg); }
+        }
+
+        /* Floating bubbles */
+        .bubble {
+            position: fixed;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.1));
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: rise linear infinite;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes rise {
+            0% {
+                transform: translateY(100vh) scale(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.6;
+            }
+            90% {
+                opacity: 0.6;
+            }
+            100% {
+                transform: translateY(-100px) scale(1);
+                opacity: 0;
+            }
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px 20px;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Wavy header */
+        .header {
+            text-align: center;
+            padding: 40px 20px 60px;
+            position: relative;
+        }
+
+        .header h1 {
+            font-family: 'Baloo 2', cursive;
+            font-size: clamp(2.5rem, 6vw, 4rem);
+            font-weight: 800;
+            color: var(--bubble-white);
+            margin: 0;
+            text-shadow:
+                3px 3px 0 var(--coral),
+                6px 6px 0 var(--teal),
+                9px 9px 20px rgba(0, 0, 0, 0.2);
+            animation: wiggle 3s ease-in-out infinite;
+        }
+
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(-1deg); }
+            50% { transform: rotate(1deg); }
+        }
+
+        .header-subtitle {
+            font-family: 'Baloo 2', cursive;
+            font-size: 1.3rem;
+            color: var(--sunny);
+            margin-top: 15px;
+            font-weight: 500;
+        }
+
+        /* Wavy divider */
+        .wave-divider {
+            width: 100%;
+            height: 30px;
+            margin-bottom: 20px;
+        }
+
+        .wave-divider svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Main content grid with playful asymmetry */
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 1024px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Blob-shaped sections */
+        .blob-section {
+            background: var(--bubble-white);
+            border-radius: 30px;
+            padding: 30px;
+            box-shadow:
+                0 10px 40px rgba(0, 0, 0, 0.1),
+                0 0 0 8px rgba(255, 255, 255, 0.1),
+                inset 0 -5px 20px rgba(0, 0, 0, 0.02);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .blob-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(78, 205, 196, 0.08) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .blob-section:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, 0.15),
+                0 0 0 12px rgba(255, 255, 255, 0.15);
+        }
+
+        .section-title {
+            font-family: 'Baloo 2', cursive;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--deep-sea);
+            margin: 0 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 8px;
+            height: 30px;
+            background: linear-gradient(180deg, var(--coral), var(--pink-pop));
+            border-radius: 10px;
+        }
+
+        /* Playful employee tabs */
+        .employee-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            max-height: 180px;
+            overflow-y: auto;
+            padding: 15px;
+            background: linear-gradient(135deg, rgba(78, 205, 196, 0.1), rgba(255, 107, 107, 0.1));
+            border-radius: 20px;
+        }
+
+        .employee-tabs::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .employee-tabs::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 10px;
+        }
+
+        .employee-tabs::-webkit-scrollbar-thumb {
+            background: var(--teal);
+            border-radius: 10px;
+        }
+
+        .employee-tab {
+            padding: 10px 20px;
+            background: white;
+            border: 2px solid transparent;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            font-family: 'Baloo 2', cursive;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--deep-sea);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .employee-tab::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+            transition: left 0.5s;
+        }
+
+        .employee-tab:hover::before {
+            left: 100%;
+        }
+
+        .employee-tab:hover {
+            transform: translateY(-3px) scale(1.05);
+            border-color: var(--teal);
+            box-shadow: 0 5px 20px rgba(78, 205, 196, 0.3);
+        }
+
+        .employee-tab.active {
+            background: linear-gradient(135deg, var(--coral), var(--pink-pop));
+            color: white;
+            transform: scale(1.08);
+            box-shadow: 0 8px 25px rgba(255, 107, 157, 0.4);
+        }
+
+        /* Chat box with personality */
+        .chat-box {
+            height: 400px;
+            overflow-y: auto;
+            border-radius: 25px;
+            padding: 20px;
+            background: linear-gradient(180deg, #f0fdfc 0%, #fff5f5 100%);
+            margin-bottom: 20px;
+            border: 3px solid transparent;
+            background-clip: padding-box;
+            position: relative;
+        }
+
+        .chat-box::before {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: -3px;
+            right: -3px;
+            bottom: -3px;
+            background: linear-gradient(135deg, var(--teal), var(--coral), var(--purple-splash));
+            border-radius: 25px;
+            z-index: -1;
+            animation: borderRotate 4s linear infinite;
+        }
+
+        @keyframes borderRotate {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
+
+        .chat-box::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .chat-box::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 10px;
+        }
+
+        .chat-box::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, var(--teal), var(--coral));
+            border-radius: 10px;
+        }
+
+        /* Messages as speech bubbles */
+        .message {
+            margin: 15px 0;
+            padding: 15px 20px;
+            max-width: 85%;
+            word-wrap: break-word;
+            position: relative;
+            animation: messagePop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes messagePop {
+            0% { transform: scale(0) translateY(20px); opacity: 0; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+
+        .user {
+            background: linear-gradient(135deg, var(--coral), var(--pink-pop));
+            color: white;
+            margin-left: auto;
+            border-radius: 25px 25px 5px 25px;
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3);
+        }
+
+        .assistant {
+            background: white;
+            color: var(--deep-sea);
+            border-radius: 25px 25px 25px 5px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            border: 2px solid rgba(78, 205, 196, 0.3);
+        }
+
+        /* Document items with playful hover */
+        .document-item {
+            padding: 15px 20px;
+            margin: 12px 0;
+            background: white;
+            border-radius: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            border-left: 5px solid var(--teal);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .document-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 5px;
+            background: linear-gradient(180deg, var(--coral), var(--teal), var(--purple-splash));
+            transform: scaleY(0);
+            transition: transform 0.3s;
+        }
+
+        .document-item:hover {
+            transform: translateX(10px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(78, 205, 196, 0.2);
+        }
+
+        .document-item:hover::before {
+            transform: scaleY(1);
+        }
+
+        .document-info {
+            flex: 1;
+        }
+
+        .document-name {
+            font-family: 'Baloo 2', cursive;
+            font-weight: 600;
+            font-size: 1.05rem;
+            color: var(--deep-sea);
+            margin-bottom: 5px;
+        }
+
+        .document-meta {
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .document-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Blob buttons */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--coral), var(--pink-pop));
+            color: white;
+            border: none;
+            padding: 15px 35px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-family: 'Baloo 2', cursive;
+            font-size: 1.1rem;
+            font-weight: 700;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 8px 25px rgba(255, 107, 107, 0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn-primary:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 15px 40px rgba(255, 107, 107, 0.5);
+        }
+
+        .btn-primary:active {
+            transform: translateY(-2px) scale(0.98);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--deep-sea);
+            border: 2px solid var(--teal);
+            padding: 12px 25px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-family: 'Baloo 2', cursive;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-secondary:hover {
+            background: var(--teal);
+            color: white;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(78, 205, 196, 0.4);
+        }
+
+        .btn-small {
+            padding: 8px 18px;
+            font-size: 0.9rem;
+            border-radius: 20px;
+        }
+
+        /* Input fields with personality */
+        input[type="text"], input[type="file"], select, textarea {
+            width: 100%;
+            padding: 15px 20px;
+            margin: 10px 0;
+            border: 3px solid rgba(78, 205, 196, 0.3);
+            border-radius: 20px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            background: white;
+            transition: all 0.3s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--coral);
+            box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.1);
+            transform: scale(1.02);
+        }
+
+        /* Filename preview */
+        .filename-preview {
+            background: linear-gradient(135deg, rgba(78, 205, 196, 0.15), rgba(255, 107, 107, 0.15));
+            border: 2px dashed var(--teal);
+            border-radius: 15px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Outfit', monospace;
+            font-size: 0.95rem;
+            color: var(--deep-sea);
+            word-break: break-all;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(78, 205, 196, 0.4); }
+            50% { box-shadow: 0 0 0 10px rgba(78, 205, 196, 0); }
+        }
+
+        /* Upload zone */
+        .upload-zone {
+            border: 3px dashed rgba(78, 205, 196, 0.5);
+            border-radius: 25px;
+            padding: 40px;
+            text-align: center;
+            background: linear-gradient(135deg, rgba(78, 205, 196, 0.05), rgba(255, 107, 107, 0.05));
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone::before {
+            content: '🐬';
+            font-size: 3rem;
+            display: block;
+            margin-bottom: 15px;
+            animation: swim 2s ease-in-out infinite;
+        }
+
+        @keyframes swim {
+            0%, 100% { transform: translateX(-10px) rotate(-5deg); }
+            50% { transform: translateX(10px) rotate(5deg); }
+        }
+
+        .upload-zone:hover {
+            border-color: var(--coral);
+            background: linear-gradient(135deg, rgba(255, 107, 107, 0.1), rgba(78, 205, 196, 0.1));
+            transform: scale(1.02);
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--coral);
+            background: linear-gradient(135deg, rgba(255, 107, 107, 0.2), rgba(78, 205, 196, 0.2));
+            transform: scale(1.05);
+        }
+
+        .upload-text {
+            font-family: 'Baloo 2', cursive;
+            font-size: 1.2rem;
+            color: var(--deep-sea);
+            font-weight: 600;
+        }
+
+        .upload-hint {
+            font-size: 0.9rem;
+            color: #888;
+            margin-top: 8px;
+        }
+
+        /* View toggle */
+        .view-toggle {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            background: rgba(0, 0, 0, 0.05);
+            padding: 8px;
+            border-radius: 25px;
+        }
+
+        .view-toggle-btn {
+            padding: 12px 25px;
+            border-radius: 20px;
+            border: 2px solid transparent;
+            background: transparent;
+            cursor: pointer;
+            font-family: 'Baloo 2', cursive;
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--deep-sea);
+            transition: all 0.3s;
+            flex: 1;
+            text-align: center;
+        }
+
+        .view-toggle-btn:hover {
+            background: rgba(78, 205, 196, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .view-toggle-btn.active {
+            background: linear-gradient(135deg, var(--coral), var(--pink-pop));
+            color: white;
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3);
+            transform: scale(1.05);
+        }
+
+        /* Loading spinner */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Status indicators */
+        .status-success {
+            color: var(--teal-dark);
+            background: rgba(78, 205, 196, 0.2);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-success::before {
+            content: '✓';
+            font-weight: bold;
+        }
+
+        .status-error {
+            color: var(--coral);
+            background: rgba(255, 107, 107, 0.2);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-error::before {
+            content: '✕';
+            font-weight: bold;
+        }
+
+        /* Progress bar */
+        .progress-container {
+            width: 100%;
+            height: 12px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--coral), var(--pink-pop), var(--purple-splash));
+            background-size: 200% 100%;
+            animation: gradientMove 2s linear infinite;
+            border-radius: 10px;
+            transition: width 0.3s;
+        }
+
+        @keyframes gradientMove {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+
+        /* Floating action button */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--coral), var(--pink-pop));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 25px rgba(255, 107, 107, 0.5);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            font-size: 1.5rem;
+            z-index: 100;
+        }
+
+        .fab:hover {
+            transform: scale(1.1) rotate(90deg);
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .empty-state-text {
+            font-family: 'Baloo 2', cursive;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        /* Batch processing section */
+        .batch-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .batch-item {
+            background: white;
+            border-radius: 15px;
+            padding: 15px;
+            border: 2px solid rgba(78, 205, 196, 0.3);
+            transition: all 0.3s;
+        }
+
+        .batch-item:hover {
+            border-color: var(--coral);
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.2);
+        }
+
+        .batch-item.processing {
+            border-color: var(--sunny);
+            background: linear-gradient(135deg, rgba(255, 230, 109, 0.1), white);
+        }
+
+        .batch-item.completed {
+            border-color: var(--teal);
+            background: linear-gradient(135deg, rgba(78, 205, 196, 0.1), white);
+        }
+
+        .batch-item.failed {
+            border-color: var(--coral);
+            background: linear-gradient(135deg, rgba(255, 107, 107, 0.1), white);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .btn-primary {
+                padding: 12px 25px;
+                font-size: 1rem;
+            }
+
+            .fab {
+                width: 50px;
+                height: 50px;
+                bottom: 20px;
+                right: 20px;
+            }
+        }
+
+        /* Staggered animation for list items */
+        .document-item,
+        .employee-tab {
+            opacity: 0;
+            animation: fadeInUp 0.5s forwards;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Custom selection */
+        ::selection {
+            background: var(--coral);
+            color: white;
+        }
+
+        /* Focus visible for accessibility */
+        button:focus-visible,
+        input:focus-visible,
+        select:focus-visible {
+            outline: 3px solid var(--sunny);
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Floating bubbles will be added by JS -->
+
+    <div class="container">
+        <header class="header">
+            <h1>🐬 PDF Bubble</h1>
+            <p class="header-subtitle">Splash into organized documents with AI magic!</p>
+        </header>
+
+        <div class="wave-divider">
+            <svg viewBox="0 0 1200 30" preserveAspectRatio="none">
+                <path d="M0,15 Q150,30 300,15 T600,15 T900,15 T1200,15 L1200,30 L0,30 Z" fill="rgba(255,255,255,0.1)"/>
+            </svg>
+        </div>
+
+        <div class="content">
+            <!-- Left column -->
+            <div class="left-column">
+                <!-- Upload Section -->
+                <div class="blob-section">
+                    <h2 class="section-title">📤 Upload Documents</h2>
+
+                    <div class="upload-zone" id="uploadZone">
+                        <div class="upload-text">Drop your PDFs here!</div>
+                        <div class="upload-hint">or click to browse • PDF, JPG, PNG</div>
+                        <input type="file" id="fileInput" multiple accept=".pdf,.jpg,.jpeg,.png" style="display: none;">
+                    </div>
+
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button class="btn-primary" id="uploadBtn">
+                            🌊 Start AI Rename
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Chat Section -->
+                <div class="blob-section" style="margin-top: 25px;">
+                    <h2 class="section-title">💬 AI Assistant</h2>
+
+                    <div class="chat-box" id="chatBox">
+                        <div class="message assistant">
+                            👋 Hi! I'm your friendly AI assistant. Drop a PDF and I'll help rename it using LM Studio!
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="chatInput" placeholder="Ask me anything about your documents...">
+                        <button class="btn-primary btn-small" id="sendBtn">Send</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right column -->
+            <div class="right-column">
+                <!-- Documents Section -->
+                <div class="blob-section">
+                    <h2 class="section-title">📚 Your Documents</h2>
+
+                    <div class="view-toggle">
+                        <button class="view-toggle-btn active" id="recentBtn">📅 Recent</button>
+                        <button class="view-toggle-btn" id="allBtn">🗂️ All Files</button>
+                    </div>
+
+                    <div class="employee-tabs" id="employeeTabs">
+                        <!-- Employee tabs will be populated by JS -->
+                    </div>
+
+                    <div id="documentsList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📭</div>
+                            <div class="empty-state-text">No documents yet</div>
+                            <div style="font-size: 0.9rem; margin-top: 8px;">Upload some PDFs to get started!</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rename Section -->
+                <div class="blob-section" style="margin-top: 25px;">
+                    <h2 class="section-title">✏️ Rename Document</h2>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; color: var(--deep-sea);">Selected Document:</label>
+                        <div id="selectedDocName" style="padding: 10px; background: rgba(78, 205, 196, 0.1); border-radius: 10px; margin-top: 5px;">
+                            None selected
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style="font-weight: 600; color: var(--deep-sea);">New Filename:</label>
+                        <input type="text" id="filenameInput" placeholder="Enter new filename...">
+
+                        <div class="filename-preview" id="filenamePreview">
+                            Preview: payment_voucher_employee_date.pdf
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button class="btn-secondary" id="cancelRenameBtn">Cancel</button>
+                        <button class="btn-primary" id="confirmRenameBtn">✨ Rename</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating action button -->
+    <div class="fab" id="fab" title="Quick Actions">
+        ⚡
+    </div>
+
+    <script>
+        // Create floating bubbles
+        function createBubbles() {
+            const body = document.body;
+            for (let i = 0; i < 15; i++) {
+                const bubble = document.createElement('div');
+                bubble.className = 'bubble';
+                bubble.style.left = Math.random() * 100 + '%';
+                bubble.style.width = (Math.random() * 40 + 20) + 'px';
+                bubble.style.height = bubble.style.width;
+                bubble.style.animationDuration = (Math.random() * 10 + 10) + 's';
+                bubble.style.animationDelay = (Math.random() * 10) + 's';
+                body.appendChild(bubble);
+            }
+        }
+
+        // Initialize bubbles
+        createBubbles();
+
+        // Add staggered animation delay to list items
+        function animateListItems() {
+            const items = document.querySelectorAll('.document-item, .employee-tab');
+            items.forEach((item, index) => {
+                item.style.animationDelay = (index * 0.05) + 's';
+            });
+        }
+
+        // Upload zone interaction
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadZone.addEventListener('click', () => fileInput.click());
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            // Handle file drop
+            const files = e.dataTransfer.files;
+            handleFiles(files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        function handleFiles(files) {
+            // File handling logic here
+            console.log('Files dropped:', files);
+            addMessage('assistant', `🎉 Great! I see ${files.length} file(s). Let me analyze them for you!`);
+        }
+
+        // Chat functionality
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const chatBox = document.getElementById('chatBox');
+
+        function addMessage(type, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = text;
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        sendBtn.addEventListener('click', () => {
+            const text = chatInput.value.trim();
+            if (text) {
+                addMessage('user', text);
+                chatInput.value = '';
+
+                // Simulate AI response
+                setTimeout(() => {
+                    addMessage('assistant', '🐬 Thanks for your message! Im processing your request...');
+                }, 500);
+            }
+        });
+
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendBtn.click();
+            }
+        });
+
+        // Filename preview
+        const filenameInput = document.getElementById('filenameInput');
+        const filenamePreview = document.getElementById('filenamePreview');
+
+        filenameInput.addEventListener('input', (e) => {
+            const value = e.target.value || 'payment_voucher_employee_date.pdf';
+            filenamePreview.textContent = 'Preview: ' + value;
+        });
+
+        // View toggle
+        const recentBtn = document.getElementById('recentBtn');
+        const allBtn = document.getElementById('allBtn');
+
+        recentBtn.addEventListener('click', () => {
+            recentBtn.classList.add('active');
+            allBtn.classList.remove('active');
+        });
+
+        allBtn.addEventListener('click', () => {
+            allBtn.classList.add('active');
+            recentBtn.classList.remove('active');
+        });
+
+        // Button hover effects
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mouseenter', () => {
+                btn.style.transform = 'translateY(-2px)';
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.style.transform = '';
+            });
+        });
+
+        // FAB click
+        document.getElementById('fab').addEventListener('click', () => {
+            addMessage('assistant', '⚡ Quick action menu coming soon!');
+        });
+
+        // Initialize
+        animateListItems();
+
+        // Example employee tabs
+        const employeeTabs = document.getElementById('employeeTabs');
+        const employees = ['John Doe', 'Jane Smith', 'Bob Wilson', 'Alice Brown', 'Charlie Davis'];
+
+        employees.forEach((emp, index) => {
+            const tab = document.createElement('button');
+            tab.className = 'employee-tab' + (index === 0 ? ' active' : '');
+            tab.textContent = emp;
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.employee-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+            });
+            employeeTabs.appendChild(tab);
+        });
+
+        animateListItems();
+    </script>
+</body>
+</html>

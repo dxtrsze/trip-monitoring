@@ -3,12 +3,13 @@ import csv
 import io
 import random
 import string
+from collections import defaultdict
 from dateutil import parser as date_parser
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import pandas as pd
-from models import db, Vehicle, Manpower, Data, Schedule, Trip, TripDetail, Cluster, User, Odo, DailyVehicleCount, Backload, TimeLog
+from models import db, Vehicle, Manpower, Data, Schedule, Trip, TripDetail, Cluster, User, Odo, DailyVehicleCount, Backload, TimeLog, LCLSummary, LCLDetail
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, subqueryload
 from functools import wraps
@@ -715,6 +716,7 @@ def manage_vehicles():
 def add_vehicle():
     plate_number = request.form.get('plate_number')
     capacity = request.form.get('capacity')
+    dept = request.form.get('dept')
 
     if not plate_number:
         flash('Plate number is required')
@@ -724,8 +726,12 @@ def add_vehicle():
         flash('Capacity is required')
         return redirect(url_for('manage_vehicles'))
 
+    if not dept:
+        flash('Department is required')
+        return redirect(url_for('manage_vehicles'))
+
     try:
-        vehicle = Vehicle(plate_number=plate_number, capacity=float(capacity))
+        vehicle = Vehicle(plate_number=plate_number, capacity=float(capacity), dept=dept)
         db.session.add(vehicle)
         db.session.commit()
         invalidate_reference_cache()  # Invalidate vehicle cache
@@ -787,6 +793,7 @@ def edit_vehicle(id):
 
     plate_number = request.form.get('plate_number')
     capacity = request.form.get('capacity')
+    dept = request.form.get('dept')
 
     if not plate_number:
         flash('Plate number is required')
@@ -796,9 +803,14 @@ def edit_vehicle(id):
         flash('Capacity is required')
         return redirect(url_for('manage_vehicles'))
 
+    if not dept:
+        flash('Department is required')
+        return redirect(url_for('manage_vehicles'))
+
     try:
         vehicle.plate_number = plate_number
         vehicle.capacity = float(capacity)
+        vehicle.dept = dept
         db.session.commit()
         invalidate_reference_cache()  # Invalidate vehicle cache
         flash('Vehicle updated successfully!')
@@ -1155,12 +1167,18 @@ def add_user():
             except ValueError:
                 flash('Invalid daily rate format', 'error')
                 return redirect(url_for('manage_users'))
+        else:
+            user.daily_rate = 0.0  # Default to 0.0 if not provided
 
         if sched_start:
             user.sched_start = sched_start
+        else:
+            user.sched_start = '08:00'  # Default to 8:00 AM
 
         if sched_end:
             user.sched_end = sched_end
+        else:
+            user.sched_end = '18:00'  # Default to 6:00 PM
 
         user.set_password(password)
         db.session.add(user)
@@ -1209,17 +1227,17 @@ def edit_user(id):
                     flash('Invalid daily rate format', 'error')
                     return redirect(url_for('manage_users'))
             else:
-                user.daily_rate = None
+                user.daily_rate = 0.0  # Default to 0.0 if not provided
 
             if sched_start and sched_start.strip():
                 user.sched_start = sched_start
             else:
-                user.sched_start = None
+                user.sched_start = '08:00'  # Default to 08:00 if not provided
 
             if sched_end and sched_end.strip():
                 user.sched_end = sched_end
             else:
-                user.sched_end = None
+                user.sched_end = '18:00'  # Default to 18:00 if not provided
 
             # Only update password if provided
             if password and password.strip():
@@ -1407,24 +1425,24 @@ def get_documents():
 def search_scheduled():
     search_term = request.args.get('search', '').strip()
     search_type = request.args.get('type', 'document')  # 'document' or 'class'
- 
-    if not search_term:
-        return jsonify([])
- 
+
+    # Start with all scheduled documents
     query = Data.query.filter(Data.status == 'Scheduled')
- 
-    if search_type == 'document':
-        # Search by document number
-        query = query.filter(Data.document_number.contains(search_term))
-    elif search_type == 'class':
-        # Search by class data (branch name)
-        query = query.filter(
-            db.or_(
-                Data.branch_name.contains(search_term),
-                Data.branch_name_v2.contains(search_term)
+
+    # Apply filters only if search term is provided
+    if search_term:
+        if search_type == 'document':
+            # Search by document number
+            query = query.filter(Data.document_number.contains(search_term))
+        elif search_type == 'class':
+            # Search by class data (branch name)
+            query = query.filter(
+                db.or_(
+                    Data.branch_name.contains(search_term),
+                    Data.branch_name_v2.contains(search_term)
+                )
             )
-        )
- 
+
     documents = query.all()
     result = []
     for doc in documents:
@@ -1441,7 +1459,7 @@ def search_scheduled():
             'document_status': doc.document_status,
             'due_date': doc.due_date.strftime('%Y-%m-%d') if doc.due_date else None
         })
- 
+
     return jsonify(result)
 
 @app.route('/schedules')
@@ -1513,7 +1531,13 @@ def view_schedule():
         for trip in schedule.trips:
             trip.details = sorted(trip.details, key=lambda d: (d.delivery_order is None, d.delivery_order or 999))
 
-    return render_template('view_schedule.html', schedules=schedules, today=today)
+    # Fetch executive vehicles for the refill form
+    executive_vehicles = Vehicle.query.filter_by(dept='Executive', status='Active').all()
+
+    # Fetch all vehicles for the edit vehicle modal (filtered in template to show only active Logistics)
+    vehicles = get_cached_active_vehicles()
+
+    return render_template('view_schedule.html', schedules=schedules, today=today, executive_vehicles=executive_vehicles, vehicles=vehicles)
 
 
 @app.route('/schedules/add', methods=['GET', 'POST'])
@@ -1677,7 +1701,8 @@ def add_schedule():
             return redirect(request.url)
 
     # GET: Load resources for form (use cached data)
-    vehicles = get_cached_active_vehicles()
+    # Filter vehicles to only show active Logistics vehicles
+    vehicles = [v for v in get_cached_active_vehicles() if v.dept == 'Logistics']
     drivers = get_cached_drivers()
     assistants = get_cached_assistants()
     return render_template('add_schedule.html',
@@ -2134,6 +2159,46 @@ def update_trip_crew():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Error updating crew: {str(e)}'}), 500
+
+
+@app.route('/update_trip_vehicle', methods=['POST'])
+@login_required
+def update_trip_vehicle():
+    """Update vehicle for a trip"""
+    if current_user.position != 'admin':
+        return jsonify({'success': False, 'message': 'Access denied. Admin privileges required.'}), 403
+
+    try:
+        data = request.get_json()
+        trip_id = data.get('trip_id')
+        vehicle_id = data.get('vehicle_id')
+
+        if not trip_id or not vehicle_id:
+            return jsonify({'success': False, 'message': 'Trip ID and Vehicle ID are required'}), 400
+
+        trip = db.session.get(Trip, trip_id)
+        if not trip:
+            return jsonify({'success': False, 'message': 'Trip not found'}), 404
+
+        vehicle = db.session.get(Vehicle, vehicle_id)
+        if not vehicle:
+            return jsonify({'success': False, 'message': 'Vehicle not found'}), 404
+
+        # Update the vehicle
+        trip.vehicle_id = vehicle_id
+
+        # Update schedule vehicle info if this is the first trip
+        schedule = trip.schedule
+        if schedule and schedule.trips and schedule.trips[0].id == trip.id:
+            schedule.plate_number = vehicle.plate_number
+            schedule.capacity = vehicle.capacity
+
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Vehicle updated successfully'})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Error updating vehicle: {str(e)}'}), 500
 
 
 @app.route('/update_trip_times', methods=['POST'])
@@ -3535,7 +3600,7 @@ def fuel_efficiency_data():
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
     vehicle_filter = request.args.get('vehicle', '')
-    status_filter = request.args.get('status', '')
+    dept_filter = request.args.get('dept', '')
 
     if not start_date_str or not end_date_str:
         return jsonify([])
@@ -3548,14 +3613,17 @@ def fuel_efficiency_data():
         from datetime import timedelta
         end_date = end_date + timedelta(days=1)
 
-        # Build query
-        query = Odo.query.filter(Odo.datetime >= start_date, Odo.datetime < end_date)
+        # Build query - join with Vehicle to filter by dept
+        query = Odo.query.join(Vehicle, Odo.plate_number == Vehicle.plate_number).filter(
+            Odo.datetime >= start_date,
+            Odo.datetime < end_date
+        )
 
         if vehicle_filter:
             query = query.filter(Odo.plate_number == vehicle_filter)
 
-        if status_filter:
-            query = query.filter(Odo.status == status_filter)
+        if dept_filter:
+            query = query.filter(Vehicle.dept == dept_filter)
 
         # Order by datetime descending (newest first)
         odo_records = query.order_by(Odo.datetime.desc()).all()
@@ -3592,7 +3660,7 @@ def export_fuel_efficiency():
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
     vehicle_filter = request.args.get('vehicle', '')
-    status_filter = request.args.get('status', '')
+    dept_filter = request.args.get('dept', '')
 
     if not start_date_str or not end_date_str:
         return "Start date and end date are required", 400
@@ -3605,14 +3673,17 @@ def export_fuel_efficiency():
         from datetime import timedelta
         end_date = end_date + timedelta(days=1)
 
-        # Build query
-        query = Odo.query.filter(Odo.datetime >= start_date, Odo.datetime < end_date)
+        # Build query - join with Vehicle to filter by dept
+        query = Odo.query.join(Vehicle, Odo.plate_number == Vehicle.plate_number).filter(
+            Odo.datetime >= start_date,
+            Odo.datetime < end_date
+        )
 
         if vehicle_filter:
             query = query.filter(Odo.plate_number == vehicle_filter)
 
-        if status_filter:
-            query = query.filter(Odo.status == status_filter)
+        if dept_filter:
+            query = query.filter(Vehicle.dept == dept_filter)
 
         # Order by datetime descending
         odo_records = query.order_by(Odo.datetime.desc()).all()
@@ -4218,6 +4289,477 @@ def apply_data_backload():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Error creating backload record: {str(e)}'}), 500
+
+# LCL Routes
+@app.route('/lcl/upload', methods=['GET', 'POST'])
+@login_required
+def upload_lcl():
+    """Upload LCL details from CSV and automatically update summaries"""
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            flash('No file selected', 'error')
+            return redirect(request.url)
+
+        file = request.files['file']
+        if file.filename == '':
+            flash('No file selected', 'error')
+            return redirect(request.url)
+
+        if not file.filename.lower().endswith('.csv'):
+            flash('Only CSV files are allowed', 'error')
+            return redirect(request.url)
+
+        try:
+            # Read file content
+            file_content = file.stream.read()
+
+            # Try multiple encodings
+            encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+            stream = None
+            decoded = False
+
+            for encoding in encodings:
+                try:
+                    stream = file_content.decode(encoding).splitlines()
+                    decoded = True
+                    break
+                except (UnicodeDecodeError, UnicodeError):
+                    continue
+
+            if not decoded:
+                flash("File encoding error. Unable to read the CSV file. Please ensure it's saved as UTF-8, Latin-1, or Windows-1252 encoding.", 'error')
+                return redirect(request.url)
+
+            csv_reader = csv.DictReader(stream)
+
+            expected_headers = {
+                "SAP Upload Date", "ISMS Upload Date", "Delivery Date", "Doc Type",
+                "DR Number", "Customer Name", "Qty", "From Whse", "To Whse",
+                "Model", "Serial Number", "ITR SO", "DR IT", "CBM", "Email"
+            }
+
+            if set(csv_reader.fieldnames) != expected_headers:
+                missing = expected_headers - set(csv_reader.fieldnames)
+                extra = set(csv_reader.fieldnames) - expected_headers
+                msg = ""
+                if missing:
+                    msg += f"Missing columns: {', '.join(missing)}. "
+                if extra:
+                    msg += f"Unexpected columns: {', '.join(extra)}."
+                flash(f"Invalid CSV headers. {msg}", 'error')
+                return redirect(request.url)
+
+            # Load all CSV rows into memory and validate
+            all_rows = list(csv_reader)
+            if not all_rows:
+                flash("CSV file is empty", 'error')
+                return redirect(request.url)
+
+            # ✅ OPTIMIZATION 1: Helper function defined ONCE outside the loop
+            def clean(val):
+                return val if val != '' else None
+
+            # Validate all rows first
+            validated_records = []
+            records_skipped = 0
+
+            for row_num, row in enumerate(all_rows, start=2):
+                try:
+                    # Parse and validate data
+                    sap_upload_date = parse_date_flexible(row["SAP Upload Date"])
+                    isms_upload_date = parse_date_flexible(row["ISMS Upload Date"]) if row["ISMS Upload Date"] else None
+                    delivery_date = parse_date_flexible(row["Delivery Date"]) if row["Delivery Date"] else None
+
+                    qty = int(float(row["Qty"])) if row["Qty"] else 0
+                    cbm = float(row["CBM"]) if row["CBM"] else 0.0
+                    email = clean(row["Email"])
+
+                    # Store validated record
+                    validated_records.append({
+                        'row_num': row_num,
+                        'sap_upload_date': sap_upload_date,
+                        'isms_upload_date': isms_upload_date,
+                        'delivery_date': delivery_date,
+                        'doc_type': clean(row["Doc Type"]),
+                        'dr_number': clean(row["DR Number"]),
+                        'customer_name': clean(row["Customer Name"]),
+                        'qty': qty,
+                        'fr_whse': clean(row["From Whse"]),
+                        'to_whse': clean(row["To Whse"]),
+                        'model': clean(row["Model"]),
+                        'serial_number': clean(row["Serial Number"]),
+                        'itr_so': clean(row["ITR SO"]),
+                        'dr_it': clean(row["DR IT"]),
+                        'cbm': cbm,
+                        'email': email
+                    })
+
+                except ValueError as ve:
+                    flash(f"Row {row_num}: Invalid data format – {str(ve)}", 'error')
+                    db.session.rollback()
+                    return redirect(request.url)
+                except Exception as e:
+                    flash(f"Row {row_num}: Unexpected error – {str(e)}", 'error')
+                    db.session.rollback()
+                    return redirect(request.url)
+
+            # Batch duplicate check using unique constraint (sap_upload_date, customer_name, serial_number)
+            csv_keys = [(r['sap_upload_date'], r['customer_name'], r['serial_number']) for r in validated_records]
+
+            if csv_keys:
+                # Split into batches to avoid SQL query size limits
+                batch_size = 500
+                existing_records = []
+
+                for i in range(0, len(csv_keys), batch_size):
+                    batch = csv_keys[i:i + batch_size]
+                    # Build OR conditions for each batch
+                    or_conditions = db.or_(
+                        *(db.and_(
+                            LCLDetail.sap_upload_date == sap_date,
+                            LCLDetail.customer_name == cust_name,
+                            LCLDetail.serial_number == serial_num
+                        ) for sap_date, cust_name, serial_num in batch)
+                    )
+                    batch_records = LCLDetail.query.filter(or_conditions).all()
+                    existing_records.extend(batch_records)
+
+                # Build set of existing records for fast lookup
+                existing_keys = {(r.sap_upload_date, r.customer_name, r.serial_number) for r in existing_records}
+            else:
+                existing_keys = set()
+
+            # Filter out duplicates and prepare bulk insert
+            records_to_insert = []
+            for record in validated_records:
+                key = (record['sap_upload_date'], record['customer_name'], record['serial_number'])
+                if key in existing_keys:
+                    records_skipped += 1
+                else:
+                    records_to_insert.append(record)
+
+            # ✅ OPTIMIZATION 3: Single transaction for both details and summaries
+            if records_to_insert:
+                try:
+                    # Insert all LCL detail records
+                    with db.session.no_autoflush:
+                        for record in records_to_insert:
+                            lcl_detail = LCLDetail(
+                                sap_upload_date=record['sap_upload_date'],
+                                isms_upload_date=record['isms_upload_date'],
+                                delivery_date=record['delivery_date'],
+                                doc_type=record['doc_type'],
+                                dr_number=record['dr_number'],
+                                customer_name=record['customer_name'],
+                                qty=record['qty'],
+                                fr_whse=record['fr_whse'],
+                                to_whse=record['to_whse'],
+                                model=record['model'],
+                                serial_number=record['serial_number'],
+                                itr_so=record['itr_so'],
+                                dr_it=record['dr_it'],
+                                cbm=record['cbm'],
+                                email=record['email']  # Store email from CSV for visibility
+                            )
+                            db.session.add(lcl_detail)
+
+                    records_added = len(records_to_insert)
+
+                    # Group by sap_upload_date and customer_name for summary
+                    summary_data = defaultdict(lambda: {'qty': 0, 'cbm': 0.0, 'email': None})
+
+                    for record in records_to_insert:
+                        key = (record['sap_upload_date'], record['customer_name'])
+                        summary_data[key]['qty'] += record['qty']
+                        summary_data[key]['cbm'] += record['cbm']
+                        # Store email from the record (assuming all records in a group have the same email)
+                        if record['email']:
+                            summary_data[key]['email'] = record['email']
+
+                    # ✅ OPTIMIZATION 2: Batch fetch existing summaries (N+1 query fix)
+                    # Get all unique (posting_date, branch_name) keys
+                    summary_keys = list(summary_data.keys())
+
+                    # Batch fetch all existing summaries at once
+                    existing_summaries = {}
+                    if summary_keys:
+                        batch_size = 500
+                        for i in range(0, len(summary_keys), batch_size):
+                            batch = summary_keys[i:i + batch_size]
+                            # Build OR conditions for batch query
+                            or_conditions = db.or_(
+                                *(db.and_(
+                                    LCLSummary.posting_date == p_date,
+                                    LCLSummary.branch_name == b_name
+                                ) for p_date, b_name in batch)
+                            )
+                            summaries = LCLSummary.query.filter(or_conditions).all()
+                            # Index by key for fast lookup
+                            for s in summaries:
+                                existing_summaries[(s.posting_date, s.branch_name)] = s
+
+                    # Update or insert summaries using in-memory lookup
+                    for (posting_date, branch_name), totals in summary_data.items():
+                        key = (posting_date, branch_name)
+
+                        if key in existing_summaries:
+                            # Update existing summary
+                            summary = existing_summaries[key]
+                            summary.tot_qty += totals['qty']
+                            summary.tot_cbm += totals['cbm']
+                            summary.updated_at = datetime.now()
+                            # Update team_lead if email is available
+                            if totals['email']:
+                                summary.team_lead = totals['email']
+                        else:
+                            # Create new summary
+                            summary = LCLSummary(
+                                posting_date=posting_date,
+                                company='FINDEN',
+                                dept='LOGISTICS',
+                                branch_name=branch_name,
+                                tot_qty=totals['qty'],
+                                tot_cbm=totals['cbm'],
+                                team_lead=totals['email'],  # Set team_lead from detail email
+                                email=totals['email']  # Store email for visibility
+                            )
+                            db.session.add(summary)
+
+                    # ✅ Single commit for both details and summaries (atomic transaction)
+                    db.session.commit()
+
+                    message = f"Successfully uploaded {records_added} LCL detail record(s)!"
+                    if records_skipped > 0:
+                        message += f" Skipped {records_skipped} duplicate record(s)."
+                    flash(message, 'success')
+                    return redirect(url_for('view_lcl_details'))
+
+                except Exception as e:
+                    # Rollback everything if any part fails
+                    db.session.rollback()
+                    flash(f"Failed to process file: {str(e)}", 'error')
+                    return redirect(request.url)
+            else:
+                flash("No new records to upload (all duplicates).", 'info')
+                return redirect(url_for('view_lcl_details'))
+
+        except Exception as e:
+            flash(f"Failed to process file: {str(e)}", 'error')
+            db.session.rollback()
+            return redirect(request.url)
+
+    return render_template('lcl_upload.html')
+
+
+@app.route('/lcl/summary')
+@login_required
+def view_lcl_summary():
+    """View LCL summary records with search and pagination"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 50  # Show 50 records per page
+    search_posting_date = request.args.get('posting_date', '').strip()
+    search_branch = request.args.get('branch', '').strip()
+
+    # Build query
+    query = LCLSummary.query
+
+    # Apply email visibility filter - non-admins only see records with their email
+    if current_user.position != 'admin':
+        query = query.filter(LCLSummary.email == current_user.email)
+
+    # Apply posting date filter if provided
+    if search_posting_date:
+        try:
+            search_date = parse_date_flexible(search_posting_date)
+            query = query.filter(LCLSummary.posting_date == search_date)
+        except:
+            pass  # Invalid date format, ignore filter
+
+    # Apply branch name filter if provided
+    if search_branch:
+        query = query.filter(LCLSummary.branch_name.contains(search_branch))
+
+    # Order by posting_date descending, then by id
+    query = query.order_by(LCLSummary.posting_date.desc(), LCLSummary.id.desc())
+
+    # Paginate results
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('lcl_summary.html',
+                         summaries=pagination.items,
+                         pagination=pagination,
+                         search_posting_date=search_posting_date,
+                         search_branch=search_branch)
+
+
+@app.route('/lcl/details')
+@login_required
+def view_lcl_details():
+    """View LCL detail records with search and pagination"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 50  # Show 50 records per page
+    search_dr = request.args.get('dr', '').strip()
+    search_serial = request.args.get('serial', '').strip()
+
+    # Build query
+    query = LCLDetail.query
+
+    # Apply email visibility filter - non-admins only see records with their email
+    if current_user.position != 'admin':
+        query = query.filter(LCLDetail.email == current_user.email)
+
+    # Apply DR number filter if provided
+    if search_dr:
+        query = query.filter(LCLDetail.dr_number.contains(search_dr))
+
+    # Apply serial number filter if provided
+    if search_serial:
+        query = query.filter(LCLDetail.serial_number.contains(search_serial))
+
+    # Order by sap_upload_date descending, then by id
+    query = query.order_by(LCLDetail.sap_upload_date.desc(), LCLDetail.id.desc())
+
+    # Paginate results
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('lcl_details.html',
+                         details=pagination.items,
+                         pagination=pagination,
+                         search_dr=search_dr,
+                         search_serial=search_serial)
+
+
+@app.route('/lcl/download_template')
+@login_required
+def download_lcl_template():
+    """Download CSV template for LCL upload"""
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+
+    # Create an in-memory CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Write header
+    writer.writerow([
+        'SAP Upload Date', 'ISMS Upload Date', 'Delivery Date', 'Doc Type',
+        'DR Number', 'Customer Name', 'Qty', 'From Whse', 'To Whse',
+        'Model', 'Serial Number', 'ITR SO', 'DR IT', 'CBM'
+    ])
+
+    # Write sample row
+    writer.writerow([
+        '2024-01-15', '2024-01-16', '2024-01-17', 'DR',
+        'DR001', 'Customer A', '10', 'WH001', 'WH002',
+        'Model X', 'SN12345', 'ITR001', 'IT', '0.5'
+    ])
+
+    # Return as downloadable CSV file
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=lcl_upload_template.csv'}
+    )
+
+
+@app.route('/lcl/summary/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_lcl_summary(id):
+    """Edit LCL summary record"""
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+
+    summary = LCLSummary.query.get_or_404(id)
+
+    if request.method == 'POST':
+        try:
+            # Helper function to parse dates or return None
+            def parse_date_field(field_name):
+                date_str = request.form.get(field_name, '')
+                return parse_date_flexible(date_str) if date_str else None
+
+            # Helper function to parse integers or return None
+            def parse_int_field(field_name):
+                value = request.form.get(field_name, '')
+                return int(value) if value else None
+
+            # Helper function to parse floats or return None
+            def parse_float_field(field_name):
+                value = request.form.get(field_name, '')
+                return float(value) if value else None
+
+            # Quantities and Measurements
+            summary.tot_qty = int(request.form.get('tot_qty', 0))
+            summary.tot_cbm = float(request.form.get('tot_cbm', 0.0))
+            summary.tot_boxes = parse_int_field('tot_boxes')
+            summary.total_kg = parse_float_field('total_kg')
+            summary.length_width_height = request.form.get('length_width_height') or None
+            summary.declared_value = parse_float_field('declared_value')
+
+            # Shipping Information
+            summary.waybill_no = request.form.get('waybill_no') or None
+            summary.pl_3pl = request.form.get('pl_3pl') or None
+            summary.shipping_line = request.form.get('shipping_line') or None
+            summary.container_no = request.form.get('container_no') or None
+            summary.seal_no = request.form.get('seal_no') or None
+            summary.port_of_destination = request.form.get('port_of_destination') or None
+            summary.freight_category = request.form.get('freight_category') or None
+            summary.ref_docs = request.form.get('ref_docs') or None
+
+            # Dates and Timeline
+            summary.prep_date = parse_date_field('prep_date')
+            summary.order_date = parse_date_field('order_date')
+            summary.booked_date = parse_date_field('booked_date')
+            summary.actual_pickup_date = parse_date_field('actual_pickup_date')
+            summary.etd = parse_date_field('etd')
+            summary.atd = parse_date_field('atd')
+            summary.eta = parse_date_field('eta')
+            summary.ata = parse_date_field('ata')
+            summary.actual_delivered_date = parse_date_field('actual_delivered_date')
+
+            # Received By and Team Lead
+            summary.received_by = request.form.get('received_by') or None
+            summary.team_lead = request.form.get('team_lead') or None
+
+            # Financial Information
+            summary.freight_charge = parse_float_field('freight_charge')
+            summary.total_freight_charge = parse_float_field('total_freight_charge')
+            summary.billing_date = parse_date_field('billing_date')
+            summary.billing_no = request.form.get('billing_no') or None
+            summary.billing_status = request.form.get('billing_status') or None
+
+            # Status and Metrics
+            summary.status = request.form.get('status') or None
+            summary.year = parse_int_field('year')
+            summary.pick_up_month = request.form.get('pick_up_month') or None
+            summary.actual_delivery_leadtime = parse_int_field('actual_delivery_leadtime')
+            summary.received_date_to_pick_up_date = parse_int_field('received_date_to_pick_up_date')
+
+            # Remarks
+            summary.remarks = request.form.get('remarks') or None
+            summary.detailed_remarks = request.form.get('detailed_remarks') or None
+
+            # Update timestamp
+            summary.updated_at = datetime.now()
+
+            db.session.commit()
+            flash('LCL summary updated successfully!', 'success')
+            return redirect(url_for('view_lcl_summary'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating LCL summary: {str(e)}', 'error')
+            return redirect(url_for('edit_lcl_summary', id=id))
+
+    return render_template('edit_lcl_summary.html', summary=summary)
+
 
 # Daily Vehicle Count Routes
 @app.route('/daily_vehicle_counts')

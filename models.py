@@ -10,6 +10,7 @@ class Vehicle(db.Model):
     plate_number = db.Column(db.String(50), unique=True, nullable=False)
     status = db.Column(db.String(50), nullable=False, default='Active')  # 'Active' or 'Inactive'
     capacity = db.Column(db.Float, nullable=True)  # Vehicle capacity in CBM
+    dept = db.Column(db.String(50), nullable=True)  # 'Logistics', 'Executive', 'Service'
 
     def __repr__(self):
         return f'<Vehicle {self.plate_number}>'
@@ -248,3 +249,90 @@ class Backload(db.Model):
 
     def __repr__(self):
         return f'<Backload {self.document_number} - {self.item_number} - Qty: {self.backload_qty}>' 
+
+class LCLSummary(db.Model):
+    __tablename__ = 'lcl_summary'
+    id = db.Column(db.Integer, primary_key=True)
+    posting_date = db.Column(db.Date, nullable=False)
+    company = db.Column(db.String(100), nullable=False, default='FINDEN')
+    dept = db.Column(db.String(100), nullable=False, default='LOGISTICS')
+    branch_name = db.Column(db.String(100), nullable=False)
+    tot_qty = db.Column(db.Integer, nullable=False, default=0)
+    tot_cbm = db.Column(db.Float, nullable=False, default=0.0)
+
+    # Additional tracking fields
+    prep_date = db.Column(db.Date, nullable=True)
+    waybill_no = db.Column(db.String(100), nullable=True)
+    pl_3pl = db.Column('3pl', db.String(100), nullable=True)  # Maps to DB column '3pl'
+    ref_docs = db.Column(db.String(200), nullable=True)
+    freight_category = db.Column(db.String(100), nullable=True)
+    shipping_line = db.Column(db.String(100), nullable=True)
+    container_no = db.Column(db.String(100), nullable=True)
+    seal_no = db.Column(db.String(100), nullable=True)
+    tot_boxes = db.Column(db.Integer, nullable=True)
+    declared_value = db.Column(db.Float, nullable=True)
+    freight_charge = db.Column(db.Float, nullable=True)
+    length_width_height = db.Column(db.String(100), nullable=True)  # Renamed from 'lenght_width_height'
+    total_kg = db.Column(db.Float, nullable=True)
+    remarks = db.Column(db.Text, nullable=True)
+    port_of_destination = db.Column(db.String(100), nullable=True)
+    order_date = db.Column(db.Date, nullable=True)
+    booked_date = db.Column(db.Date, nullable=True)
+    actual_pickup_date = db.Column(db.Date, nullable=True)
+    etd = db.Column(db.Date, nullable=True)  # Estimated Time of Departure
+    atd = db.Column(db.Date, nullable=True)  # Actual Time of Departure
+    eta = db.Column(db.Date, nullable=True)  # Estimated Time of Arrival
+    ata = db.Column(db.Date, nullable=True)  # Actual Time of Arrival
+    actual_delivered_date = db.Column(db.Date, nullable=True)
+    received_by = db.Column(db.String(100), nullable=True)
+    status = db.Column(db.String(50), nullable=True)
+    detailed_remarks = db.Column(db.Text, nullable=True)
+    actual_delivery_leadtime = db.Column(db.Integer, nullable=True)  # In days
+    received_date_to_pick_up_date = db.Column(db.Integer, nullable=True)  # In days
+    year = db.Column(db.Integer, nullable=True)
+    pick_up_month = db.Column(db.String(20), nullable=True)
+    total_freight_charge = db.Column(db.Float, nullable=True)
+    billing_date = db.Column(db.Date, nullable=True)
+    billing_no = db.Column(db.String(100), nullable=True)
+    billing_status = db.Column(db.String(50), nullable=True)
+    team_lead = db.Column(db.String(100), nullable=True)
+    email = db.Column(db.String(120), nullable=True)  # For visibility control
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+    # Unique constraint to prevent duplicate summaries
+    __table_args__ = (
+        db.UniqueConstraint('posting_date', 'branch_name', name='uix_lcl_summary_date_branch'),
+    )
+
+    def __repr__(self):
+        return f'<LCLSummary {self.posting_date} - {self.branch_name} - Qty: {self.tot_qty}>'
+
+class LCLDetail(db.Model):
+    __tablename__ = 'lcl_detail'
+    id = db.Column(db.Integer, primary_key=True)
+    sap_upload_date = db.Column(db.Date, nullable=False)
+    isms_upload_date = db.Column(db.Date, nullable=True)
+    delivery_date = db.Column(db.Date, nullable=True)
+    doc_type = db.Column(db.String(50), nullable=True)
+    dr_number = db.Column(db.String(100), nullable=True)
+    customer_name = db.Column(db.String(100), nullable=False)
+    qty = db.Column(db.Integer, nullable=False, default=0)
+    fr_whse = db.Column(db.String(100), nullable=True)
+    to_whse = db.Column(db.String(100), nullable=True)
+    model = db.Column(db.String(100), nullable=True)
+    serial_number = db.Column(db.String(100), nullable=False)
+    itr_so = db.Column(db.String(100), nullable=True)
+    dr_it = db.Column(db.String(100), nullable=True)
+    cbm = db.Column(db.Float, nullable=False, default=0.0)
+    email = db.Column(db.String(120), nullable=True)  # For visibility control
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
+
+    # Unique constraint to prevent duplicate uploads
+    __table_args__ = (
+        db.UniqueConstraint('sap_upload_date', 'customer_name', 'serial_number', name='uix_lcl_detail_unique'),
+    )
+
+    def __repr__(self):
+        return f'<LCLDetail {self.sap_upload_date} - {self.customer_name} - {self.serial_number}>'
