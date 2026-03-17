@@ -2557,9 +2557,9 @@ def time_out():
                 else:
                     effective_start = time_log.time_in
 
-                # Calculate hrs_rendered from effective_start to time_out
+                # Calculate total hrs_rendered from effective_start to time_out (for display)
                 time_diff = time_out - effective_start
-                hrs_rendered = time_diff.total_seconds() / 3600  # Convert to hours
+                total_hrs_rendered = time_diff.total_seconds() / 3600  # Convert to hours
 
                 # Deduct 1 hour for lunch break (12:00 PM - 1:00 PM) if work period crosses this time
                 lunch_start = effective_start.replace(hour=12, minute=0, second=0, microsecond=0)
@@ -2569,12 +2569,26 @@ def time_out():
                 crosses_lunch = (effective_start < lunch_end and time_out > lunch_start)
 
                 if crosses_lunch:
-                    # Deduct 1 hour for lunch break from regular hours
-                    hrs_rendered_for_pay = max(0, hrs_rendered - 1.0)
-                    time_log.hrs_rendered = round(hrs_rendered - 1.0, 2)  # Display includes lunch deduction
+                    # Deduct 1 hour for lunch break from total hours
+                    time_log.hrs_rendered = round(max(0, total_hrs_rendered - 1.0), 2)
                 else:
-                    hrs_rendered_for_pay = hrs_rendered
-                    time_log.hrs_rendered = round(hrs_rendered, 2)
+                    time_log.hrs_rendered = round(total_hrs_rendered, 2)
+
+                # Calculate regular pay: use sched_end as cutoff if time_out > sched_end
+                if time_out > sched_end_actual:
+                    # Use sched_end as the cutoff for regular pay calculation
+                    regular_pay_end_time = sched_end_actual
+                else:
+                    # Use actual time_out for regular pay calculation
+                    regular_pay_end_time = time_out
+
+                # Calculate regular hours (for pay) from effective_start to regular_pay_end_time
+                regular_time_diff = regular_pay_end_time - effective_start
+                regular_hrs_for_pay = regular_time_diff.total_seconds() / 3600
+
+                # Apply lunch deduction to regular hours if applicable
+                if crosses_lunch:
+                    regular_hrs_for_pay = max(0, regular_hrs_for_pay - 1.0)
 
                 # Calculate scheduled hours (from sched_start to sched_end)
                 scheduled_hours = (sched_end_actual - sched_start_actual).total_seconds() / 3600
@@ -2591,12 +2605,9 @@ def time_out():
                 else:
                     time_log.over_time = 0.0
 
-                # Calculate regular pay (based on scheduled hours or actual hours worked, whichever is less)
+                # Calculate regular pay
                 hourly_rate = time_log.daily_rate / 8  # Assuming 8-hour workday for daily rate
-
-                # Regular pay covers hours up to sched_end (with lunch deduction if applicable)
-                regular_hours = min(hrs_rendered_for_pay, scheduled_hours)
-                time_log.pay = round(hourly_rate * regular_hours, 2)
+                time_log.pay = round(hourly_rate * regular_hrs_for_pay, 2)
 
                 # Calculate overtime pay (1.25x hourly rate)
                 if time_log.over_time > 0:
@@ -2707,9 +2718,9 @@ def edit_time_log(id):
                         else:
                             effective_start = time_log.time_in
 
-                        # Calculate hrs_rendered from effective_start to time_out
+                        # Calculate total hrs_rendered from effective_start to time_out (for display)
                         time_diff = time_log.time_out - effective_start
-                        hrs_rendered = time_diff.total_seconds() / 3600
+                        total_hrs_rendered = time_diff.total_seconds() / 3600
 
                         # Deduct 1 hour for lunch break (12:00 PM - 1:00 PM) if work period crosses this time
                         lunch_start = effective_start.replace(hour=12, minute=0, second=0, microsecond=0)
@@ -2719,14 +2730,28 @@ def edit_time_log(id):
                         crosses_lunch = (effective_start < lunch_end and time_log.time_out > lunch_start)
 
                         if crosses_lunch:
-                            # Deduct 1 hour for lunch break from regular hours
-                            hrs_rendered_for_pay = max(0, hrs_rendered - 1.0)
-                            time_log.hrs_rendered = round(hrs_rendered - 1.0, 2)  # Display includes lunch deduction
+                            # Deduct 1 hour for lunch break from total hours
+                            time_log.hrs_rendered = round(max(0, total_hrs_rendered - 1.0), 2)
                         else:
-                            hrs_rendered_for_pay = hrs_rendered
-                            time_log.hrs_rendered = round(hrs_rendered, 2)
+                            time_log.hrs_rendered = round(total_hrs_rendered, 2)
 
-                        # Calculate scheduled hours
+                        # Calculate regular pay: use sched_end as cutoff if time_out > sched_end
+                        if time_log.time_out > sched_end_actual:
+                            # Use sched_end as the cutoff for regular pay calculation
+                            regular_pay_end_time = sched_end_actual
+                        else:
+                            # Use actual time_out for regular pay calculation
+                            regular_pay_end_time = time_log.time_out
+
+                        # Calculate regular hours (for pay) from effective_start to regular_pay_end_time
+                        regular_time_diff = regular_pay_end_time - effective_start
+                        regular_hrs_for_pay = regular_time_diff.total_seconds() / 3600
+
+                        # Apply lunch deduction to regular hours if applicable
+                        if crosses_lunch:
+                            regular_hrs_for_pay = max(0, regular_hrs_for_pay - 1.0)
+
+                        # Calculate scheduled hours (from sched_start to sched_end)
                         scheduled_hours = (sched_end_actual - sched_start_actual).total_seconds() / 3600
 
                         # Calculate overtime: only count hours >= 1 hour after sched_end
@@ -2741,8 +2766,7 @@ def edit_time_log(id):
 
                         # Calculate regular pay
                         hourly_rate = time_log.daily_rate / 8
-                        regular_hours = min(hrs_rendered_for_pay, scheduled_hours)
-                        time_log.pay = round(hourly_rate * regular_hours, 2)
+                        time_log.pay = round(hourly_rate * regular_hrs_for_pay, 2)
 
                         # Calculate overtime pay (1.25x hourly rate)
                         if time_log.over_time > 0:
