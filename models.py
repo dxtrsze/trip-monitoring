@@ -336,3 +336,17 @@ class LCLDetail(db.Model):
 
     def __repr__(self):
         return f'<LCLDetail {self.sap_upload_date} - {self.customer_name} - {self.serial_number}>'
+
+class ArchiveLog(db.Model):
+    __tablename__ = 'archive_log'
+    id = db.Column(db.Integer, primary_key=True)
+    executed_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
+    cutoff_year = db.Column(db.Integer, nullable=False)
+    records_archived = db.Column(db.Integer, nullable=False)
+    tables_affected = db.Column(db.Text)  # JSON string
+    status = db.Column(db.String(50))  # 'success', 'failed', 'partial'
+    error_message = db.Column(db.Text)
+    execution_time_seconds = db.Column(db.Float)
+
+    def __repr__(self):
+        return f'<ArchiveLog {self.executed_at} - Year {self.cutoff_year} - {self.status}>'

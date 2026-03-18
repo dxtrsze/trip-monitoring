@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+
+{% block title %}Archive Admin - Trip Monitoring System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-12">
+        <h2><i class="bi bi-archive"></i> Archive Administration</h2>
+        <p class="text-muted">Manage archival of old trip monitoring data (2+ years old)</p>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <!-- Archive Status Card -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Archive Status</h5>
+            </div>
+            <div class="card-body">
+                <div id="archive-status-loading">
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="archive-status-content" style="display: none;">
+                    <dl class="row">
+                        <dt class="col-sm-6">Current Year:</dt>
+                        <dd class="col-sm-6" id="current-year">-</dd>
+
+                        <dt class="col-sm-6">Archive Cutoff Year:</dt>
+                        <dd class="col-sm-6">
+                            <strong id="cutoff-year">-</strong>
+                            <small class="text-muted">(records from this year and older will be archived)</small>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Archive Operations Card -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Archive Operations</h5>
+            </div>
+            <div class="card-body">
+                <div id="recent-logs-loading">
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-success" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="recent-logs-content" style="display: none;">
+                    <div id="recent-logs-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <!-- Records to Archive Preview -->
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-list-check"></i> Records to Archive (Preview)</h5>
+            </div>
+            <div class="card-body">
+                <div id="records-preview-loading">
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-warning" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="records-preview-content" style="display: none;">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> The following records will be moved to the archive database and removed from the main database:
+                    </div>
+                    <div class="row" id="records-preview-grid"></div>
+
+                    <div class="alert alert-warning mt-3">
+                        <strong><i class="bi bi-exclamation-triangle"></i> Warning:</strong>
+                        This operation will move data to the archive database and remove it from the main database.
+                        This action cannot be easily undone. Make sure you have a backup before proceeding.
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <button class="btn btn-danger btn-lg" id="execute-archive-btn">
+                            <i class="bi bi-box-arrow-right"></i> Execute Archive
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Execute Archive Modal -->
+<div class="modal fade" id="executeArchiveModal" tabindex="-1" aria-labelledby="executeArchiveModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="executeArchiveModalLabel">
+                    <i class="bi bi-exclamation-triangle"></i> Confirm Archive Execution
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to execute the archive operation?</p>
+                <p>This will:</p>
+                <ul>
+                    <li>Copy approximately <strong id="modal-total-records">0</strong> records to the archive database</li>
+                    <li>Delete those records from the main database</li>
+                    <li>Affect the following tables: <strong id="modal-tables">-</strong></li>
+                </ul>
+                <p class="text-danger">
+                    <strong>This action cannot be easily undone!</strong>
+                </p>
+                <div id="archive-progress" style="display: none;">
+                    <div class="progress mb-2">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%">
+                            Archiving in progress...
+                        </div>
+                    </div>
+                    <p class="text-center text-muted">Please wait, this may take several minutes...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="cancel-archive-btn">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirm-archive-btn">
+                    <i class="bi bi-box-arrow-right"></i> Yes, Execute Archive
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Result Modal -->
+<div class="modal fade" id="resultModal" tabindex="-1" aria-labelledby="resultModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" id="result-modal-header">
+                <h5 class="modal-title" id="resultModalLabel">Archive Result</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="result-modal-body"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Load archive status on page load
+    loadArchiveStatus();
+
+    // Execute archive button click
+    document.getElementById('execute-archive-btn').addEventListener('click', function() {
+        showExecuteModal();
+    });
+
+    // Confirm archive button click
+    document.getElementById('confirm-archive-btn').addEventListener('click', function() {
+        executeArchive();
+    });
+});
+
+function loadArchiveStatus() {
+    fetch('/admin/archive/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error loading archive status:', data.error);
+                return;
+            }
+
+            // Update status section
+            document.getElementById('current-year').textContent = data.current_year;
+            document.getElementById('cutoff-year').textContent = data.cutoff_year;
+            document.getElementById('archive-status-loading').style.display = 'none';
+            document.getElementById('archive-status-content').style.display = 'block';
+
+            // Update records preview
+            const previewGrid = document.getElementById('records-preview-grid');
+            previewGrid.innerHTML = '';
+            let totalRecords = 0;
+
+            for (const [table, count] of Object.entries(data.records_to_archive)) {
+                if (count > 0) {
+                    totalRecords += count;
+                    const col = document.createElement('div');
+                    col.className = 'col-md-3 mb-3';
+                    col.innerHTML = `
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h6 class="card-title">${table}</h6>
+                                <h3 class="text-primary">${count.toLocaleString()}</h3>
+                                <p class="card-text text-muted">records</p>
+                            </div>
+                        </div>
+                    `;
+                    previewGrid.appendChild(col);
+                }
+            }
+
+            if (totalRecords === 0) {
+                previewGrid.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="bi bi-check-circle"></i> No records to archive. The database is up to date!</div></div>';
+                document.getElementById('execute-archive-btn').disabled = true;
+            }
+
+            document.getElementById('records-preview-loading').style.display = 'none';
+            document.getElementById('records-preview-content').style.display = 'block';
+
+            // Update recent logs
+            const logsList = document.getElementById('recent-logs-list');
+            logsList.innerHTML = '';
+
+            if (data.recent_logs.length === 0) {
+                logsList.innerHTML = '<p class="text-muted text-center">No archive operations have been performed yet.</p>';
+            } else {
+                data.recent_logs.forEach(log => {
+                    const logItem = document.createElement('div');
+                    logItem.className = 'mb-3 pb-3 border-bottom';
+
+                    const statusClass = log.status === 'success' ? 'success' : 'danger';
+                    const statusIcon = log.status === 'success' ? 'check-circle' : 'x-circle';
+
+                    let tablesAffected = 'N/A';
+                    if (log.tables_affected) {
+                        try {
+                            const tables = JSON.parse(log.tables_affected);
+                            tablesAffected = Object.keys(tables).join(', ');
+                        } catch (e) {
+                            tablesAffected = log.tables_affected;
+                        }
+                    }
+
+                    logItem.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">
+                                    <i class="bi bi-${statusIcon} text-${statusClass}"></i>
+                                    ${log.executed_at ? new Date(log.executed_at).toLocaleString() : 'N/A'}
+                                </h6>
+                                <p class="mb-1">
+                                    <strong>Records:</strong> ${log.records_archived.toLocaleString()} |
+                                    <strong>Year:</strong> ${log.cutoff_year} |
+                                    <strong>Tables:</strong> ${tablesAffected}
+                                </p>
+                                ${log.error_message ? `<p class="text-danger mb-0"><small><strong>Error:</strong> ${log.error_message}</small></p>` : ''}
+                                <p class="text-muted mb-0"><small>Execution time: ${log.execution_time_seconds ? log.execution_time_seconds.toFixed(2) : 'N/A'} seconds</small></p>
+                            </div>
+                        </div>
+                    `;
+                    logsList.appendChild(logItem);
+                });
+            }
+
+            document.getElementById('recent-logs-loading').style.display = 'none';
+            document.getElementById('recent-logs-content').style.display = 'block';
+        })
+        .catch(error => {
+            console.error('Error loading archive status:', error);
+        });
+}
+
+function showExecuteModal() {
+    // Get records to archive counts
+    fetch('/admin/archive/status')
+        .then(response => response.json())
+        .then(data => {
+            let totalRecords = 0;
+            for (const count of Object.values(data.records_to_archive)) {
+                totalRecords += count;
+            }
+
+            const tables = Object.keys(data.records_to_archive).filter(t => data.records_to_archive[t] > 0).join(', ');
+
+            document.getElementById('modal-total-records').textContent = totalRecords.toLocaleString();
+            document.getElementById('modal-tables').textContent = tables || 'None';
+
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('executeArchiveModal'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error loading archive status:', error);
+        });
+}
+
+function executeArchive() {
+    // Show progress
+    document.getElementById('archive-progress').style.display = 'block';
+    document.getElementById('confirm-archive-btn').disabled = true;
+    document.getElementById('cancel-archive-btn').disabled = true;
+
+    fetch('/admin/archive/execute', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Hide execute modal
+        const executeModal = bootstrap.Modal.getInstance(document.getElementById('executeArchiveModal'));
+        executeModal.hide();
+
+        // Show result modal
+        showResultModal(data);
+
+        // Reload archive status after a delay
+        setTimeout(() => {
+            loadArchiveStatus();
+        }, 2000);
+    })
+    .catch(error => {
+        console.error('Error executing archive:', error);
+
+        // Hide execute modal
+        const executeModal = bootstrap.Modal.getInstance(document.getElementById('executeArchiveModal'));
+        executeModal.hide();
+
+        // Show error result
+        showResultModal({
+            success: false,
+            error: 'Network error or server error occurred'
+        });
+    })
+    .finally(() => {
+        // Reset modal state
+        document.getElementById('archive-progress').style.display = 'none';
+        document.getElementById('confirm-archive-btn').disabled = false;
+        document.getElementById('cancel-archive-btn').disabled = false;
+    });
+}
+
+function showResultModal(result) {
+    const modalHeader = document.getElementById('result-modal-header');
+    const modalBody = document.getElementById('result-modal-body');
+
+    if (result.success) {
+        modalHeader.className = 'modal-header bg-success text-white';
+        modalBody.innerHTML = `
+            <div class="text-center">
+                <i class="bi bi-check-circle display-4 text-success"></i>
+                <h5 class="mt-3">Archive Completed Successfully!</h5>
+                <p>${result.total_records_archived.toLocaleString()} records archived in ${result.execution_time_seconds.toFixed(2)} seconds</p>
+            </div>
+            <div class="mt-4">
+                <h6>Records by Table:</h6>
+                <ul class="list-group">
+                    ${Object.entries(result.tables_affected).map(([table, count]) => `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            ${table}
+                            <span class="badge bg-primary rounded-pill">${count.toLocaleString()}</span>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+            <p class="text-muted mt-3 mb-0"><small>Cutoff year: ${result.cutoff_year}</small></p>
+        `;
+    } else {
+        modalHeader.className = 'modal-header bg-danger text-white';
+        modalBody.innerHTML = `
+            <div class="text-center">
+                <i class="bi bi-x-circle display-4 text-danger"></i>
+                <h5 class="mt-3">Archive Failed</h5>
+                <p class="text-danger">${result.error || 'An unknown error occurred'}</p>
+            </div>
+            <p class="text-muted mt-3 mb-0"><small>Please check the error logs and try again.</small></p>
+        `;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('resultModal'));
+    modal.show();
+}
+</script>
+{% endblock %}

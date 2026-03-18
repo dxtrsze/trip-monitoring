@@ -1,6 +1,7 @@
 import os
 import csv
 import io
+import json
 import random
 import string
 from collections import defaultdict
@@ -9,7 +10,7 @@ from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import pandas as pd
-from models import db, Vehicle, Manpower, Data, Schedule, Trip, TripDetail, Cluster, User, Odo, DailyVehicleCount, Backload, TimeLog, LCLSummary, LCLDetail
+from models import db, Vehicle, Manpower, Data, Schedule, Trip, TripDetail, Cluster, User, Odo, DailyVehicleCount, Backload, TimeLog, LCLSummary, LCLDetail, ArchiveLog
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, subqueryload
 from functools import wraps
@@ -27,6 +28,12 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
 # Create uploads directory if it doesn't exist
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
+
+# Configure archive database bind
+archive_db_path = os.path.join(os.path.dirname(__file__), 'instance', 'trip_archive.db')
+archive_db_path_abs = os.path.abspath(archive_db_path)
+archive_db_url = f'sqlite:///{archive_db_path_abs}'
+app.config['SQLALCHEMY_BINDS'] = {'archive': archive_db_url}
 
 db.init_app(app)
 
@@ -5017,6 +5024,79 @@ def test_vehicle_count():
     else:
         flash('Error running daily vehicle count.', 'error')
     return redirect(url_for('view_schedule'))
+
+
+# Archive Management Routes
+@app.route('/admin/archive')
+@login_required
+def archive_admin():
+    """Display archive admin page"""
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+    return render_template('archive_admin.html')
+
+
+@app.route('/admin/archive/status')
+@login_required
+def archive_status():
+    """Return JSON with archive status and counts"""
+    if current_user.position != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+
+    from archive_service import get_archive_cutoff_year, identify_records_to_archive
+
+    cutoff_year = get_archive_cutoff_year()
+
+    # Get recent archive logs
+    recent_archives = ArchiveLog.query.order_by(ArchiveLog.executed_at.desc()).limit(5).all()
+
+    logs = []
+    for log in recent_archives:
+        logs.append({
+            'executed_at': log.executed_at.isoformat() if log.executed_at else None,
+            'cutoff_year': log.cutoff_year,
+            'records_archived': log.records_archived,
+            'tables_affected': log.tables_affected,
+            'status': log.status,
+            'error_message': log.error_message,
+            'execution_time_seconds': log.execution_time_seconds
+        })
+
+    return jsonify({
+        'cutoff_year': cutoff_year,
+        'current_year': datetime.now().year,
+        'records_to_archive': identify_records_to_archive(),
+        'recent_logs': logs
+    })
+
+
+@app.route('/admin/archive/execute', methods=['POST'])
+@login_required
+def execute_archive():
+    """Execute archive operation and return JSON result"""
+    if current_user.position != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+
+    from archive_service import execute_archive
+
+    # Execute the archive
+    result = execute_archive()
+
+    # Log the operation
+    log_entry = ArchiveLog(
+        executed_at=datetime.now(),
+        cutoff_year=result['cutoff_year'],
+        records_archived=result['total_records_archived'],
+        tables_affected=json.dumps(result['tables_affected']),
+        status='success' if result['success'] else 'failed',
+        error_message=result.get('error'),
+        execution_time_seconds=result['execution_time_seconds']
+    )
+    db.session.add(log_entry)
+    db.session.commit()
+
+    return jsonify(result)
 
 
 if __name__ == '__main__':
