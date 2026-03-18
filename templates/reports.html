@@ -469,10 +469,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const exportDifotBtn = document.getElementById('exportDifotBtn');
   const difotDateRange = document.getElementById('difotDateRange');
 
-  // Set default date range to last 30 days
+  // Set default date range to last 7 days
   const today = new Date();
-  const thirtyDaysAgo = new Date(today);
-  thirtyDaysAgo.setDate(today.getDate() - 30);
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 7);
   const defaultStart = thirtyDaysAgo.toISOString().split('T')[0];
   const defaultEnd = today.toISOString().split('T')[0];
 
