@@ -473,7 +473,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const today = new Date();
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setDate(today.getDate() - 7);
-  const defaultStart = thirtyDaysAgo.toISOString().split('T')[0];
+  const defaultStart = sevenDaysAgo.toISOString().split('T')[0];
   const defaultEnd = today.toISOString().split('T')[0];
 
   document.getElementById('scheduledStartDate').value = defaultStart;
