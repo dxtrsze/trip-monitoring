@@ -406,12 +406,25 @@ def upload_data():
             validated_records = []
             rows_to_insert = []
             records_skipped = 0
+            posting_date_errors = []
 
             for row_num, row in enumerate(all_rows, start=2):
                 try:
                     # Parse and validate data
                     posting_date = parse_date_flexible(row["Posting Date"])
                     due_date = parse_date_flexible(row["Due Date"])
+                    document_number = row["Document Number"] if row["Document Number"] else None
+
+                    # Validate posting_date - NOT NULL constraint
+                    if posting_date is None:
+                        if document_number:
+                            posting_date_errors.append(f"Row {row_num}: Missing posting_date (Document Number: {document_number})")
+                        else:
+                            # Skip line entirely if both posting_date and document_number are null
+                            records_skipped += 1
+                            continue
+                        continue
+
                     cbm = float(row["CBM"]) if row["CBM"] else 0.0
                     ordered_qty = float(row["Ordered Quantity"]) if row["Ordered Quantity"] else 0
                     ordered_qty_int = int(float(row["Ordered Quantity"])) if row["Ordered Quantity"] else 0
@@ -434,7 +447,7 @@ def upload_data():
                     # Store validated record
                     validated_records.append({
                         'row_num': row_num,
-                        'document_number': row["Document Number"],
+                        'document_number': document_number,
                         'item_number': row["Item No."],
                         'ordered_qty': ordered_qty_int,
                         'type': row["Type"],
@@ -467,6 +480,38 @@ def upload_data():
                     flash(f"Row {row_num}: Unexpected error – {str(e)}", 'error')
                     db.session.rollback()
                     return redirect(request.url)
+
+            # Step 2.5: Check for duplicates within the CSV file itself
+            csv_internal_duplicates = {}
+            csv_unique_records = []
+            csv_internal_skipped = 0
+
+            for record in validated_records:
+                key = (record['document_number'], record['item_number'], record['ordered_qty'])
+                if key in csv_internal_duplicates:
+                    # Track the duplicate
+                    if key not in csv_internal_duplicates:
+                        csv_internal_duplicates[key] = [record['row_num']]
+                    csv_internal_duplicates[key].append(record['row_num'])
+                    csv_internal_skipped += 1
+                else:
+                    csv_internal_duplicates[key] = [record['row_num']]
+                    csv_unique_records.append(record)
+
+            # Build error messages for internal duplicates
+            csv_dup_warnings = []
+            for key, row_nums in csv_internal_duplicates.items():
+                if len(row_nums) > 1:
+                    doc_num = key[0] if key[0] else "N/A"
+                    item_num = key[1] if key[1] else "N/A"
+                    ord_qty = key[2]
+                    rows_str = ", ".join(map(str, row_nums))
+                    csv_dup_warnings.append(
+                        f"Duplicate record in CSV: Document '{doc_num}', Item '{item_num}', Qty {ord_qty} found in rows {rows_str}. Keeping first occurrence, skipping duplicates."
+                    )
+
+            # Update validated_records to only include unique records from CSV
+            validated_records = csv_unique_records
 
             # Step 3: Batch duplicate check - SINGLE QUERY instead of N queries
             # Build list of all unique (document_number, item_number, ordered_qty) from CSV
@@ -543,9 +588,24 @@ def upload_data():
                 records_added = len(records_to_insert)
             else:
                 records_added = 0
+
+            # Display CSV internal duplicate warnings first
+            if csv_dup_warnings:
+                for warning in csv_dup_warnings:
+                    flash(warning, 'warning')
+
+            # Display posting_date validation errors
+            if posting_date_errors:
+                for error in posting_date_errors:
+                    flash(error, 'warning')
+
             message = f"Successfully uploaded {records_added} record(s)!"
-            if records_skipped > 0:
-                message += f" Skipped {records_skipped} duplicate record(s)."
+            total_skipped = records_skipped + csv_internal_skipped
+            if total_skipped > 0:
+                if csv_internal_skipped > 0:
+                    message += f" Skipped {total_skipped} duplicate record(s) ({csv_internal_skipped} within CSV, {records_skipped} in database)."
+                else:
+                    message += f" Skipped {total_skipped} duplicate record(s)."
             flash(message, 'success')
             return redirect(url_for('view_data'))
 
