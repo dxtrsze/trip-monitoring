@@ -3826,7 +3826,63 @@ def export_fuel_efficiency():
         output = io.StringIO()
         writer = csv.writer(output)
 
-        # Write headers
+        # Calculate summary by plate number
+        summary = {}
+        for odo in odo_records:
+            plate = odo.plate_number
+            if plate not in summary:
+                summary[plate] = {
+                    'plate_number': plate,
+                    'start_odo': None,
+                    'end_odo': None,
+                    'total_liters': 0,
+                    'total_amount': 0
+                }
+
+            odo_reading = float(odo.odometer_reading or 0)
+
+            if odo.status == 'start odo':
+                if summary[plate]['start_odo'] is None or odo_reading < summary[plate]['start_odo']:
+                    summary[plate]['start_odo'] = odo_reading
+            elif odo.status == 'end odo':
+                if summary[plate]['end_odo'] is None or odo_reading > summary[plate]['end_odo']:
+                    summary[plate]['end_odo'] = odo_reading
+
+            if odo.litters:
+                summary[plate]['total_liters'] += float(odo.litters)
+            if odo.amount:
+                summary[plate]['total_amount'] += float(odo.amount)
+
+        # Write summary section
+        writer.writerow([])
+        writer.writerow(['SUMMARY BY VEHICLE'])
+        writer.writerow([
+            'Plate Number', 'Total KM Traveled', 'KM/Liter',
+            'Total Liters', 'Total Amount', 'Average Price/Liter'
+        ])
+
+        for summary_row in summary.values():
+            total_km = (summary_row['end_odo'] is not None and summary_row['start_odo'] is not None)
+            total_km_value = (summary_row['end_odo'] - summary_row['start_odo']) if total_km else None
+
+            km_per_liter = (summary_row['total_liters'] > 0 and total_km_value is not None)
+            km_per_liter_value = (total_km_value / summary_row['total_liters']) if km_per_liter else None
+
+            avg_price_per_liter = (summary_row['total_amount'] / summary_row['total_liters']) if summary_row['total_liters'] > 0 else None
+
+            writer.writerow([
+                summary_row['plate_number'],
+                f"{total_km_value:.1f}" if total_km_value is not None else 'N/A',
+                f"{km_per_liter_value:.2f}" if km_per_liter_value is not None else 'N/A',
+                f"{summary_row['total_liters']:.2f}",
+                f"₱{summary_row['total_amount']:.2f}",
+                f"₱{avg_price_per_liter:.2f}" if avg_price_per_liter is not None else 'N/A'
+            ])
+
+        # Write detailed records section
+        writer.writerow([])
+        writer.writerow([])
+        writer.writerow(['DETAILED ODO RECORDS'])
         writer.writerow([
             'Date & Time', 'Plate Number', 'Status',
             'Odometer Reading', 'Liters', 'Amount',
@@ -3850,8 +3906,8 @@ def export_fuel_efficiency():
 
         # Return as downloadable CSV file
         vehicle_suffix = f"_{vehicle_filter}" if vehicle_filter else ""
-        status_suffix = f"_{status_filter}" if status_filter else ""
-        filename = f"odo_records{vehicle_suffix}{status_suffix}_{start_date_str}_to_{end_date_str}.csv"
+        dept_suffix = f"_{dept_filter}" if dept_filter else ""
+        filename = f"odo_records{vehicle_suffix}{dept_suffix}_{start_date_str}_to_{end_date_str}.csv"
         return Response(
             output.getvalue(),
             mimetype='text/csv',
