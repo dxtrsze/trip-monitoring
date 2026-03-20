@@ -3310,16 +3310,30 @@ def dashboard_gauges():
     if current_user.position != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
 
-    from datetime import date, timedelta
+    from datetime import date, timedelta, datetime
 
+    # Default to last 7 days
     end_date = date.today()
     start_date = end_date - timedelta(days=6)
 
-    if request.args.get('start_date'):
-        start_date = datetime.strptime(request.args.get('start_date'), '%Y-%m-%d').date()
-    if request.args.get('end_date'):
-        end_date = datetime.strptime(request.args.get('end_date'), '%Y-%m-%d').date()
+    # Parse query params if provided
+    try:
+        if request.args.get('start_date'):
+            start_date = datetime.strptime(request.args.get('start_date'), '%Y-%m-%d').date()
+        if request.args.get('end_date'):
+            end_date = datetime.strptime(request.args.get('end_date'), '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
 
+    # Validate date range
+    if start_date > end_date:
+        return jsonify({'error': 'start_date must be before or equal to end_date'}), 400
+
+    max_days = 90
+    if (end_date - start_date).days > max_days:
+        return jsonify({'error': f'Date range cannot exceed {max_days} days'}), 400
+
+    # Ensure end_date is not in the future
     if end_date > date.today():
         end_date = date.today()
 

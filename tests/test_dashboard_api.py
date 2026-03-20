@@ -117,3 +117,27 @@ def test_gauges_requires_admin_access(client):
     # Try to access gauges endpoint
     response = client.get('/api/dashboard/gauges')
     assert response.status_code == 403
+
+def test_gauges_validates_date_format(client, auth_headers):
+    """Test that gauges endpoint validates date format"""
+    response = client.get('/api/dashboard/gauges?start_date=invalid-date')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert 'error' in data
+    assert 'Invalid date format' in data['error']
+
+def test_gauges_validates_date_range(client, auth_headers):
+    """Test that gauges endpoint validates start_date <= end_date"""
+    response = client.get('/api/dashboard/gauges?start_date=2026-03-20&end_date=2026-03-15')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert 'error' in data
+    assert 'start_date must be before or equal to end_date' in data['error']
+
+def test_gauges_validates_max_days(client, auth_headers):
+    """Test that gauges endpoint enforces 90-day limit"""
+    response = client.get('/api/dashboard/gauges?start_date=2026-01-01&end_date=2026-04-02')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert 'error' in data
+    assert 'Date range cannot exceed 90 days' in data['error']
