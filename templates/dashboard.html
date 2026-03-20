@@ -17,16 +17,16 @@
       <a class="nav-link btn btn-outline-light me-2" href="{{ url_for('view_schedule') }}">
         <i class="bi bi-calendar-check"></i> View Schedule
       </a>
-      <a class="nav-link btn btn-outline-light me-2" href="{{ url_for('index') }}">
+      <a class="nav-link btn btn-outline-light me-2" href="{{ url_for('upload_data') }}">
         <i class="bi bi-upload"></i> Upload Data
       </a>
-      <a class="nav-link btn btn-outline-light me-2" href="/odo_logs">
+      <a class="nav-link btn btn-outline-light me-2" href="{{ url_for('odo_logs') }}">
         <i class="bi bi-fuel-pump"></i> Add ODO
       </a>
       <a class="nav-link btn btn-outline-light me-2" href="{{ url_for('reports') }}">
         <i class="bi bi-graph-up"></i> Reports
       </a>
-      <a class="nav-link btn btn-outline-light me-2" href="/vehicles">
+      <a class="nav-link btn btn-outline-light me-2" href="{{ url_for('manage_vehicles') }}">
         <i class="bi bi-truck"></i> Vehicles
       </a>
     </div>
