@@ -211,11 +211,13 @@ def invalidate_reference_cache():
 @app.route('/')
 def index():
     if current_user.is_authenticated:
-        # Redirect to view_schedule for all authenticated users
-        return redirect(url_for('view_schedule'))
+        if current_user.position == 'admin':
+            return render_template('dashboard.html')
+        else:
+            # Non-admin users redirect to view_schedule
+            return redirect(url_for('view_schedule'))
     else:
-        # Redirect to login for non-authenticated users
-        return redirect(url_for('login'))
+        return render_template('login.html')
 
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
@@ -454,9 +456,26 @@ def upload_data():
                             continue
                         continue
 
-                    cbm = float(row["CBM"]) if row["CBM"] else 0.0
-                    ordered_qty = float(row["Ordered Quantity"]) if row["Ordered Quantity"] else 0
-                    ordered_qty_int = int(float(row["Ordered Quantity"])) if row["Ordered Quantity"] else 0
+                    # Helper to safely convert numeric fields (handles spaces and empty strings)
+                    def safe_float(val, default=0.0):
+                        if val is None or val.strip() == '':
+                            return default
+                        try:
+                            return float(val)
+                        except (ValueError, TypeError):
+                            return default
+
+                    def safe_int(val, default=0):
+                        if val is None or val.strip() == '':
+                            return default
+                        try:
+                            return int(float(val))
+                        except (ValueError, TypeError):
+                            return default
+
+                    cbm = safe_float(row["CBM"], 0.0)
+                    ordered_qty = safe_float(row["Ordered Quantity"], 0.0)
+                    ordered_qty_int = safe_int(row["Ordered Quantity"], 0)
 
                     # Helper to convert empty strings to None
                     def clean(val):
@@ -484,8 +503,8 @@ def upload_data():
                         'due_date': due_date,
                         'cbm': cbm,
                         'ordered_qty_float': ordered_qty,
-                        'delivered_qty': float(row["Delivered Quantity"]) if row["Delivered Quantity"] else 0.0,
-                        'remaining_open_qty': float(row["Remaining Open Qty"]) if row["Remaining Open Qty"] else 0.0,
+                        'delivered_qty': safe_float(row["Delivered Quantity"], 0.0),
+                        'remaining_open_qty': safe_float(row["Remaining Open Qty"], 0.0),
                         'from_whse_code': clean(row["From Warehouse Code"]),
                         'to_whse': clean(row["To Warehouse"]),
                         'remarks': clean(row["Remarks"]),
@@ -4348,6 +4367,269 @@ def export_difot():
         return f"Invalid date format: {str(e)}", 400
     except Exception as e:
         return f"Error exporting DIFOT data: {str(e)}", 500
+
+
+@app.route('/missing_data_report')
+@login_required
+def missing_data_report():
+    """Get Missing Data Report - trips with missing arrive/departure and vehicles with no ODO records"""
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    if not start_date_str or not end_date_str:
+        return jsonify([])
+
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+        # Include the entire end date
+        from datetime import timedelta
+        end_date = end_date + timedelta(days=1)
+
+        # Part 1: Find trips with missing arrive/departure data
+        # Query trip_details where arrive or departure is NULL or empty string
+        missing_trips_query = db.session.query(
+            TripDetail,
+            Trip,
+            Schedule,
+            Vehicle
+        ).join(
+            Trip, TripDetail.trip_id == Trip.id
+        ).join(
+            Schedule, Trip.schedule_id == Schedule.id
+        ).join(
+            Vehicle, Trip.vehicle_id == Vehicle.id
+        ).filter(
+            Schedule.delivery_schedule >= start_date,
+            Schedule.delivery_schedule < end_date,
+            db.or_(
+                TripDetail.arrive == None,
+                TripDetail.arrive == '',
+                TripDetail.departure == None,
+                TripDetail.departure == ''
+            )
+        ).options(
+            joinedload(Trip.drivers),
+            joinedload(Trip.assistants)
+        ).all()
+
+        missing_trips = []
+        for detail, trip, schedule, vehicle in missing_trips_query:
+            # Get driver and assistant names using the many-to-many relationships
+            driver_names = [driver.name for driver in trip.drivers] if trip.drivers else []
+            assistant_names = [assistant.name for assistant in trip.assistants] if trip.assistants else []
+
+            missing_trips.append({
+                'delivery_schedule': schedule.delivery_schedule.strftime('%Y-%m-%d'),
+                'plate_number': vehicle.plate_number,
+                'drivers': ', '.join(driver_names) if driver_names else 'N/A',
+                'assistants': ', '.join(assistant_names) if assistant_names else 'N/A',
+                'trip_number': trip.trip_number,
+                'branch_name': detail.branch_name_v2 or 'N/A',
+                'arrive': detail.arrive.strftime('%I:%M %p') if detail.arrive else 'Missing',
+                'departure': detail.departure.strftime('%I:%M %p') if detail.departure else 'Missing'
+            })
+
+        # Part 2: Find vehicles with no ODO records for each day
+        # First, get all vehicles used in the date range
+        vehicles_used = db.session.query(
+            Schedule.delivery_schedule,
+            Vehicle.id,
+            Vehicle.plate_number,
+            Vehicle.dept
+        ).join(
+            Trip, Trip.schedule_id == Schedule.id
+        ).join(
+            Vehicle, Trip.vehicle_id == Vehicle.id
+        ).filter(
+            Schedule.delivery_schedule >= start_date,
+            Schedule.delivery_schedule < end_date
+        ).distinct().all()
+
+        # Get all ODO records in the date range (using datetime field)
+        from sqlalchemy import cast, Date
+        odo_records = db.session.query(
+            Odo
+        ).filter(
+            cast(Odo.datetime, Date) >= start_date,
+            cast(Odo.datetime, Date) < end_date
+        ).all()
+
+        # Create a set of (date, plate_number) pairs that have ODO records
+        odo_coverage = set()
+        for odo in odo_records:
+            odo_coverage.add((odo.datetime.date(), odo.plate_number))
+
+        # Find vehicles with no ODO records
+        missing_odo = []
+        for schedule_date, vehicle_id, plate_number, dept in vehicles_used:
+            if (schedule_date, plate_number) not in odo_coverage:
+                missing_odo.append({
+                    'delivery_schedule': schedule_date.strftime('%Y-%m-%d'),
+                    'plate_number': plate_number,
+                    'department': dept or 'N/A',
+                    'has_start_odo': False,
+                    'has_refill_odo': False,
+                    'has_end_odo': False
+                })
+
+        result = {
+            'missing_trips': missing_trips,
+            'missing_odo': missing_odo
+        }
+
+        return jsonify(result)
+
+    except ValueError as e:
+        return jsonify({'error': f'Invalid date format: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Error fetching missing data: {str(e)}'}), 500
+
+
+@app.route('/export_missing_data')
+@login_required
+def export_missing_data():
+    """Export Missing Data Report to CSV"""
+    if current_user.position != 'admin':
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('view_schedule'))
+
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    if not start_date_str or not end_date_str:
+        return "Start date and end date are required", 400
+
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+        # Include the entire end date
+        from datetime import timedelta
+        end_date = end_date + timedelta(days=1)
+
+        # Create CSV data
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Write header for Missing Trips section
+        writer.writerow(['MISSING TRIPS - ARRIVE/DEPARTURE DATA'])
+        writer.writerow([
+            'Date', 'Plate Number', 'Driver(s)', 'Assistant(s)', 'Trip #',
+            'Branch', 'Arrive Time', 'Departure Time'
+        ])
+
+        # Query missing trips
+        missing_trips_query = db.session.query(
+            TripDetail,
+            Trip,
+            Schedule,
+            Vehicle
+        ).join(
+            Trip, TripDetail.trip_id == Trip.id
+        ).join(
+            Schedule, Trip.schedule_id == Schedule.id
+        ).join(
+            Vehicle, Trip.vehicle_id == Vehicle.id
+        ).filter(
+            Schedule.delivery_schedule >= start_date,
+            Schedule.delivery_schedule < end_date,
+            db.or_(
+                TripDetail.arrive == None,
+                TripDetail.arrive == '',
+                TripDetail.departure == None,
+                TripDetail.departure == ''
+            )
+        ).options(
+            joinedload(Trip.drivers),
+            joinedload(Trip.assistants)
+        ).all()
+
+        # Write missing trips data
+        for detail, trip, schedule, vehicle in missing_trips_query:
+            # Get driver and assistant names using the many-to-many relationships
+            driver_names = [driver.name for driver in trip.drivers] if trip.drivers else []
+            assistant_names = [assistant.name for assistant in trip.assistants] if trip.assistants else []
+
+            writer.writerow([
+                schedule.delivery_schedule.strftime('%Y-%m-%d'),
+                vehicle.plate_number,
+                ', '.join(driver_names) if driver_names else 'N/A',
+                ', '.join(assistant_names) if assistant_names else 'N/A',
+                f"Trip {trip.trip_number}",
+                detail.branch_name_v2 or 'N/A',
+                detail.arrive.strftime('%I:%M %p') if detail.arrive else 'Missing',
+                detail.departure.strftime('%I:%M %p') if detail.departure else 'Missing'
+            ])
+
+        # Add blank row and header for Missing ODO section
+        writer.writerow([])
+        writer.writerow(['MISSING ODO RECORDS'])
+        writer.writerow([
+            'Date', 'Plate Number', 'Department', 'Has Start ODO', 'Has Refill ODO', 'Has End ODO'
+        ])
+
+        # Query vehicles used in date range
+        vehicles_used = db.session.query(
+            Schedule.delivery_schedule,
+            Vehicle.id,
+            Vehicle.plate_number,
+            Vehicle.dept
+        ).join(
+            Trip, Trip.schedule_id == Schedule.id
+        ).join(
+            Vehicle, Trip.vehicle_id == Vehicle.id
+        ).filter(
+            Schedule.delivery_schedule >= start_date,
+            Schedule.delivery_schedule < end_date
+        ).distinct().all()
+
+        # Get all ODO records in the date range (using datetime field)
+        from sqlalchemy import cast, Date
+        odo_records = db.session.query(
+            Odo
+        ).filter(
+            cast(Odo.datetime, Date) >= start_date,
+            cast(Odo.datetime, Date) < end_date
+        ).all()
+
+        # Create a set of (date, plate_number) pairs that have ODO records
+        odo_coverage = set()
+        for odo in odo_records:
+            odo_coverage.add((odo.datetime.date(), odo.plate_number))
+
+        # Write missing ODO data
+        for schedule_date, vehicle_id, plate_number, dept in vehicles_used:
+            if (schedule_date, plate_number) not in odo_coverage:
+                writer.writerow([
+                    schedule_date.strftime('%Y-%m-%d'),
+                    plate_number,
+                    dept or 'N/A',
+                    'No',
+                    'No',
+                    'No'
+                ])
+
+        output.seek(0)
+
+        # Return as downloadable CSV file
+        filename = f"missing_data_report_{start_date_str}_to_{end_date_str}.csv"
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+
+    except ValueError as e:
+        return f"Invalid date format: {str(e)}", 400
+    except Exception as e:
+        return f"Error exporting missing data: {str(e)}", 500
+
 
 # Backload Routes
 @app.route('/backload')
