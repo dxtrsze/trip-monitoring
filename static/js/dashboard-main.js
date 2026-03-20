@@ -69,20 +69,16 @@
 
   // Show loading state
   function showLoading() {
-    const container = document.getElementById('kpiContainer');
-    if (container) {
-      container.style.opacity = '0.5';
-      container.style.pointerEvents = 'none';
-    }
+    // Add loading overlay to each chart container
+    const chartContainers = document.querySelectorAll('.card-body div[id$="Chart"], .card-body div[id$="Gauge"]');
+    chartContainers.forEach(container => {
+      container.innerHTML = '<div class="d-flex justify-content-center align-items-center h-100"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+    });
   }
 
   // Hide loading state
   function hideLoading() {
-    const container = document.getElementById('kpiContainer');
-    if (container) {
-      container.style.opacity = '1';
-      container.style.pointerEvents = 'auto';
-    }
+    // Loading indicators removed when charts render
   }
 
   // Show error message
