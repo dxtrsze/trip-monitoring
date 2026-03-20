@@ -242,7 +242,7 @@ def login():
 
             # Redirect to the appropriate page based on user position
             if user.position == 'admin':
-                return redirect(url_for('view_data'))
+                return redirect(url_for('index'))
             else:
                 return redirect(url_for('view_schedule'))
         else:
