@@ -3043,6 +3043,10 @@ def dashboard_trends():
     if start_date > end_date:
         return jsonify({'error': 'start_date must be before or equal to end_date'}), 400
 
+    max_days = 90
+    if (end_date - start_date).days > max_days:
+        return jsonify({'error': f'Date range cannot exceed {max_days} days'}), 400
+
     # Ensure end_date is not in the future
     if end_date > date.today():
         end_date = date.today()
@@ -3133,17 +3137,22 @@ def dashboard_trends():
     truck_utilization = []
     current_date = start_date
     while current_date <= end_date:
-        utilization_records = db.session.query(
-            sql_func.sum(Trip.total_cbm).label('total_loaded'),
-            sql_func.sum(Vehicle.capacity).label('total_capacity')
-        ).join(Vehicle).join(Schedule).filter(
+        # Get total loaded CBM from all trips on this date
+        total_loaded = db.session.query(sql_func.sum(Trip.total_cbm)).join(Schedule).filter(
+            Schedule.delivery_schedule == current_date
+        ).scalar() or 0
+
+        # Get distinct vehicles used on this date and sum their capacity once each
+        total_capacity = db.session.query(
+            sql_func.sum(Vehicle.capacity)
+        ).join(Trip).join(Schedule).filter(
             Schedule.delivery_schedule == current_date,
             Vehicle.capacity.isnot(None),
             Vehicle.capacity > 0
-        ).first()
+        ).distinct().scalar() or 0
 
-        if utilization_records and utilization_records.total_capacity:
-            util_percent = (utilization_records.total_loaded / utilization_records.total_capacity * 100)
+        if total_capacity > 0:
+            util_percent = (total_loaded / total_capacity * 100)
         else:
             util_percent = 0
 
