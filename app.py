@@ -2772,10 +2772,21 @@ def dashboard_kpis():
     previous_start_date = previous_end_date - timedelta(days=6)
 
     # Parse query params if provided
-    if request.args.get('start_date'):
-        start_date = datetime.strptime(request.args.get('start_date'), '%Y-%m-%d').date()
-    if request.args.get('end_date'):
-        end_date = datetime.strptime(request.args.get('end_date'), '%Y-%m-%d').date()
+    try:
+        if request.args.get('start_date'):
+            start_date = datetime.strptime(request.args.get('start_date'), '%Y-%m-%d').date()
+        if request.args.get('end_date'):
+            end_date = datetime.strptime(request.args.get('end_date'), '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+
+    # Validate date range
+    if start_date > end_date:
+        return jsonify({'error': 'start_date must be before or equal to end_date'}), 400
+
+    max_days = 90
+    if (end_date - start_date).days > max_days:
+        return jsonify({'error': f'Date range cannot exceed {max_days} days'}), 400
 
     # Ensure end_date is not in the future
     if end_date > date.today():
@@ -2847,7 +2858,7 @@ def dashboard_kpis():
     }
 
     # Cache response for 5 minutes
-    cache.set(cache_key, response, timeout=300)
+    cache.set(cache_key, response, ttl=300)
 
     return jsonify(response)
 
@@ -2962,28 +2973,13 @@ def calculate_period_kpis(start_date, end_date):
         km_per_liter = 0
         cost_per_km = 0
 
-    # Data Completeness (count unique incomplete details, not double-counting)
+    # Data Completeness (based on trip details with arrive/departure times)
+    # Only vehicles that had trips are checked - vehicles without trips don't affect completeness
     from sqlalchemy import or_
     incomplete_details = db.session.query(TripDetail).join(Trip).join(Schedule).filter(
         Schedule.delivery_schedule.between(start_date, end_date),
         or_(TripDetail.arrive.is_(None), TripDetail.departure.is_(None))
     ).count()
-
-    vehicles_with_trips = db.session.query(Trip.vehicle_id).join(Schedule).filter(
-        Schedule.delivery_schedule.between(start_date, end_date)
-    ).distinct().all()
-
-    vehicle_ids = [v[0] for v in vehicles_with_trips]
-    vehicles_without_odo = 0
-
-    for vehicle_id in vehicle_ids:
-        vehicle = db.session.query(Vehicle).get(vehicle_id)
-        odo_count = db.session.query(Odo).filter(
-            Odo.plate_number == vehicle.plate_number,
-            Odo.datetime.between(start_datetime, end_datetime)
-        ).count()
-        if odo_count == 0:
-            vehicles_without_odo += 1
 
     complete_details = total_details - incomplete_details
     completeness = (complete_details / total_details * 100) if total_details > 0 else 0
