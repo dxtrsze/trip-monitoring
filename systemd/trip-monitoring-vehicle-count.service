@@ -1,0 +1,18 @@
+[Unit]
+Description=Trip Monitoring Daily Vehicle Count
+After=network.target
+
+[Service]
+Type=oneshot
+User=dextercuasze
+Group=staff
+WorkingDirectory=/Users/dextercuasze/Desktop/trip_monitoring
+Environment="PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/opt/homebrew/bin/python3 /Users/dextercuasze/Desktop/trip_monitoring/bin/run_daily_vehicle_count.py
+StandardOutput=journal
+StandardError=journal
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
