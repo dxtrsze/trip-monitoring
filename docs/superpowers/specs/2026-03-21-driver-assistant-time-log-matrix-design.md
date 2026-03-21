@@ -553,8 +553,8 @@ def export_driver_assistant_time_logs():
 ### Frontend Tasks (templates/reports.html)
 
 1. **Add new report card**
-   - Position after Missing Data Report card
-   - Purple header to distinguish from other reports
+   - Position after Missing Data Report card (7th card, Row 3)
+   - Light blue header (`bg-info`) to distinguish from other reports
    - Form with start/end date inputs
    - Submit button
 
