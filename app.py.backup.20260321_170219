@@ -6370,8 +6370,7 @@ def init_scheduler():
 
 
 # Initialize scheduler when app starts
-# scheduler = init_scheduler()  # DEPRECATED: Replaced by systemd timer
-scheduler = None
+scheduler = init_scheduler()
 
 
 @app.route('/admin/scheduler_status')
