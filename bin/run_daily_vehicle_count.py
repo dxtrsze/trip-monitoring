@@ -3,6 +3,8 @@
 Standalone script to run daily vehicle count.
 Designed to be executed by systemd timer service.
 
+Counts active Logistics in-house vehicles only.
+
 Usage:
     python3 bin/run_daily_vehicle_count.py
 
@@ -25,7 +27,7 @@ from sqlalchemy.exc import IntegrityError
 
 
 def count_daily_active_vehicles():
-    """Count active vehicles and save to DailyVehicleCount table"""
+    """Count active Logistics in-house vehicles and save to DailyVehicleCount table"""
     with app.app_context():
         try:
             today = datetime.now().date()
@@ -33,21 +35,25 @@ def count_daily_active_vehicles():
             # Check if record already exists for today
             existing_count = DailyVehicleCount.query.filter_by(date=today).first()
 
-            # Count active vehicles
-            active_count = Vehicle.query.filter_by(status='Active').count()
+            # Count active Logistics in-house vehicles (Logistics department, in-house type only)
+            active_count = Vehicle.query.filter_by(
+                status='Active',
+                dept='Logistics',
+                type='in-house'
+            ).count()
 
             if existing_count:
                 # Update existing record
                 existing_count.qty = active_count
                 db.session.commit()
-                print(f"[{datetime.now()}] Updated daily vehicle count for {today}: {active_count} active vehicles")
+                print(f"[{datetime.now()}] Updated daily vehicle count for {today}: {active_count} active Logistics in-house vehicles")
             else:
                 # Create new record
                 try:
                     daily_count = DailyVehicleCount(date=today, qty=active_count)
                     db.session.add(daily_count)
                     db.session.commit()
-                    print(f"[{datetime.now()}] Created daily vehicle count for {today}: {active_count} active vehicles")
+                    print(f"[{datetime.now()}] Created daily vehicle count for {today}: {active_count} active Logistics in-house vehicles")
                 except IntegrityError:
                     # Race condition: record created by another process
                     db.session.rollback()
@@ -55,7 +61,7 @@ def count_daily_active_vehicles():
                     if existing_count:
                         existing_count.qty = active_count
                         db.session.commit()
-                        print(f"[{datetime.now()}] Updated daily vehicle count for {today} (race condition recovery): {active_count} active vehicles")
+                        print(f"[{datetime.now()}] Updated daily vehicle count for {today} (race condition recovery): {active_count} active Logistics in-house vehicles")
 
             return True
 
