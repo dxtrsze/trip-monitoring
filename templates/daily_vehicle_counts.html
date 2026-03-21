@@ -58,7 +58,7 @@
           {% else %}
             <tr>
               <td colspan="4" class="text-center">
-                No records found. The system will automatically count active vehicles daily at 5:00 AM Manila Time.
+                No records found. The system will automatically count active Logistics in-house vehicles daily at 5:00 AM Manila Time.
                 <br>Use "Run Count Now" to manually count vehicles.
               </td>
             </tr>
@@ -101,7 +101,7 @@
 
 <script>
 function runCountNow() {
-  if (!confirm('Are you sure you want to count active vehicles now? This will create/update today\'s record.')) {
+  if (!confirm('Are you sure you want to count active Logistics in-house vehicles now? This will create/update today\'s record.')) {
     return;
   }
 
@@ -122,7 +122,7 @@ function runCountNow() {
   })
   .catch(error => {
     console.error('Error:', error);
-    alert('An error occurred while counting vehicles');
+    alert('An error occurred while counting Logistics in-house vehicles');
   });
 }
 </script>

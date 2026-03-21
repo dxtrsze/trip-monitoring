@@ -6415,7 +6415,7 @@ def run_vehicle_count():
         count = DailyVehicleCount.query.filter_by(date=today).first()
         return jsonify({
             'success': True,
-            'message': f'Successfully counted {count.qty} active vehicles for {today.strftime("%B %d, %Y")}'
+            'message': f'Successfully counted {count.qty} active Logistics in-house vehicles for {today.strftime("%B %d, %Y")}'
         })
     else:
         return jsonify({'success': False, 'message': 'Failed to count vehicles. Check server logs.'})
@@ -6527,8 +6527,12 @@ def count_daily_active_vehicles():
             from sqlalchemy.exc import IntegrityError
             today = datetime.now().date()
 
-            # Count active vehicles
-            active_count = Vehicle.query.filter_by(status='Active').count()
+            # Count active vehicles (Logistics department, in-house type only)
+            active_count = Vehicle.query.filter_by(
+                status='Active',
+                dept='Logistics',
+                type='in-house'
+            ).count()
 
             # Check if record already exists for today
             existing_count = DailyVehicleCount.query.filter_by(date=today).first()
@@ -6537,14 +6541,14 @@ def count_daily_active_vehicles():
                 # Update existing record
                 existing_count.qty = active_count
                 db.session.commit()
-                print(f"[{datetime.now()}] Updated daily vehicle count for {today}: {active_count} active vehicles")
+                print(f"[{datetime.now()}] Updated daily vehicle count for {today}: {active_count} active Logistics in-house vehicles")
             else:
                 # Create new record
                 try:
                     daily_count = DailyVehicleCount(date=today, qty=active_count)
                     db.session.add(daily_count)
                     db.session.commit()
-                    print(f"[{datetime.now()}] Created daily vehicle count for {today}: {active_count} active vehicles")
+                    print(f"[{datetime.now()}] Created daily vehicle count for {today}: {active_count} active Logistics in-house vehicles")
                 except IntegrityError:
                     # Handle race condition - another process created the record
                     db.session.rollback()
