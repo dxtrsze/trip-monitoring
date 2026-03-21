@@ -1015,6 +1015,48 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   });
 
+  // Time Log Matrix Form Submit
+  timeLogMatrixForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const startDate = document.getElementById('timeLogStartDate').value;
+    const endDate = document.getElementById('timeLogEndDate').value;
+
+    // Show date range in the report header
+    const start = new Date(startDate).toLocaleDateString();
+    const end = new Date(endDate).toLocaleDateString();
+    timeLogDateRange.textContent = `${start} - ${end}`;
+
+    // Fetch time log matrix data
+    fetch(`/driver_assistant_time_logs?start_date=${startDate}&end_date=${endDate}`)
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(err => {
+            throw new Error(err.error || 'Failed to fetch time log data');
+          });
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        displayTimeLogMatrix(data);
+        // Hide other report results
+        reportResults.style.display = 'none';
+        truckResults.style.display = 'none';
+        fleetResults.style.display = 'none';
+        fuelResults.style.display = 'none';
+        frequencyResults.style.display = 'none';
+        difotResults.style.display = 'none';
+        missingResults.style.display = 'none';
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error: ' + error.message);
+      });
+  });
+
   // Export Scheduled Report
   exportBtn.addEventListener('click', function() {
     const startDate = document.getElementById('scheduledStartDate').value;
