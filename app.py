@@ -6148,21 +6148,12 @@ def daily_vehicle_counts():
     # Get all daily vehicle counts, ordered by date descending
     counts = DailyVehicleCount.query.order_by(DailyVehicleCount.date.desc()).all()
 
-    # Check scheduler status
-    scheduler_running = scheduler is not None
-    next_run_time = None
-    if scheduler and scheduler_running:
-        try:
-            jobs = scheduler.get_jobs()
-            if jobs:
-                next_run_time = jobs[0].next_run_time
-        except:
-            pass
+    # Systemd timer is always active (managed by OS, not Flask)
+    scheduler_running = True
 
     return render_template('daily_vehicle_counts.html',
                          counts=counts,
-                         scheduler_running=scheduler_running,
-                         next_run_time=next_run_time)
+                         scheduler_running=scheduler_running)
 
 
 @app.route('/run_vehicle_count', methods=['POST'])
@@ -6329,80 +6320,11 @@ def count_daily_active_vehicles():
             print(f"[{datetime.now()}] Error counting daily vehicles: {str(e)}")
             return False
 
-
-# Initialize and start scheduler
-def init_scheduler():
-    """Initialize the background scheduler for daily tasks"""
-    try:
-        from apscheduler.schedulers.background import BackgroundScheduler
-        from apscheduler.triggers.cron import CronTrigger
-        import atexit
-        from pytz import timezone
-
-        scheduler = BackgroundScheduler()
-        manila_tz = timezone('Asia/Manila')
-
-        # Schedule job to run every day at 5:00 AM Manila time
-        scheduler.add_job(
-            func=count_daily_active_vehicles,
-            trigger=CronTrigger(hour=5, minute=0, timezone=manila_tz),
-            id='daily_vehicle_count',
-            name='Count daily active vehicles',
-            replace_existing=True,
-            max_instances=1  # Prevent multiple instances running simultaneously
-        )
-
-        # Start the scheduler
-        scheduler.start()
-        print(f"[{datetime.now()}] Scheduler started. Daily vehicle count will run at 5:00 AM Manila time daily.")
-
-        # Shut down the scheduler when exiting the app
-        atexit.register(lambda: scheduler.shutdown())
-
-        return scheduler
-    except ImportError:
-        print("[WARNING] APScheduler not installed. Install it with: pip install apscheduler")
-        print("[WARNING] Daily vehicle count will not run automatically.")
-        return None
-    except Exception as e:
-        print(f"[ERROR] Failed to start scheduler: {str(e)}")
-        return None
+# DEPRECATED: Scheduler replaced by systemd timer service
+# The vehicle count is now managed by systemd at 5:00 AM Manila time
+# See: systemd/trip-monitoring-vehicle-count.timer
 
 
-# Initialize scheduler when app starts
-# scheduler = init_scheduler()  # DEPRECATED: Replaced by systemd timer
-scheduler = None
-
-
-@app.route('/admin/scheduler_status')
-@login_required
-def scheduler_status():
-    """Check if scheduler is running"""
-    if current_user.position != 'admin':
-        return jsonify({'error': 'Access denied'}), 403
-
-    scheduler_status = {
-        'scheduler_running': scheduler is not None,
-        'apscheduler_installed': False,
-        'next_run_time': None,
-        'jobs': []
-    }
-
-    if scheduler:
-        try:
-            scheduler_status['apscheduler_installed'] = True
-            scheduler_status['jobs'] = [
-                {
-                    'id': job.id,
-                    'name': job.name,
-                    'next_run_time': job.next_run_time.isoformat() if job.next_run_time else None
-                }
-                for job in scheduler.get_jobs()
-            ]
-        except Exception as e:
-            scheduler_status['error'] = str(e)
-
-    return jsonify(scheduler_status)
 
 
 @app.route('/admin/test_vehicle_count')
