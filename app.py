@@ -5217,94 +5217,9 @@ def missing_data_report():
                     'has_end_odo': False
                 })
 
-        # Part 3: Find drivers/assistants with missing or incomplete TimeLog records
-        # Get all manpower assigned to trips in the date range
-        # Get all unique (date, manpower_id, role) combinations from trips
-        manpower_assignments = db.session.query(
-            Schedule.delivery_schedule,
-            Manpower.id,
-            Manpower.name,
-            Manpower.role,
-            Manpower.user_id
-        ).join(
-            Trip, Trip.schedule_id == Schedule.id
-        ).join(
-            trip_driver, Trip.id == trip_driver.c.trip_id
-        ).join(
-            Manpower, Manpower.id == trip_driver.c.manpower_id
-        ).filter(
-            Schedule.delivery_schedule >= start_date,
-            Schedule.delivery_schedule < end_date
-        ).union_all(
-            db.session.query(
-                Schedule.delivery_schedule,
-                Manpower.id,
-                Manpower.name,
-                Manpower.role,
-                Manpower.user_id
-            ).join(
-                Trip, Trip.schedule_id == Schedule.id
-            ).join(
-                trip_assistant, Trip.id == trip_assistant.c.trip_id
-            ).join(
-                Manpower, Manpower.id == trip_assistant.c.manpower_id
-            ).filter(
-                Schedule.delivery_schedule >= start_date,
-                Schedule.delivery_schedule < end_date
-            )
-        ).distinct().all()
-
-        # Get all TimeLog records in the date range
-        time_logs = db.session.query(
-            TimeLog
-        ).filter(
-            cast(TimeLog.time_in, Date) >= start_date,
-            cast(TimeLog.time_in, Date) < end_date
-        ).all()
-
-        # Create a dictionary of (date, user_id) -> TimeLog
-        time_log_coverage = {}
-        for tl in time_logs:
-            tl_date = tl.time_in.date()
-            key = (tl_date, tl.user_id)
-            time_log_coverage[key] = tl
-
-        # Find ALL manpower assigned to trips and their time log status
-        time_log_status = []
-        for schedule_date, manpower_id, name, role, user_id in manpower_assignments:
-            time_in_str = None
-            time_out_str = None
-
-            if user_id is None:
-                # No user account linked, cannot have TimeLog
-                time_in_str = None
-                time_out_str = None
-            else:
-                key = (schedule_date, user_id)
-                if key not in time_log_coverage:
-                    # No TimeLog record for this date
-                    time_in_str = None
-                    time_out_str = None
-                else:
-                    tl = time_log_coverage[key]
-                    # Format time_in and time_out as time strings (HH:MM AM/PM)
-                    if tl.time_in:
-                        time_in_str = tl.time_in.strftime('%I:%M %p')
-                    if tl.time_out:
-                        time_out_str = tl.time_out.strftime('%I:%M %p')
-
-            time_log_status.append({
-                'delivery_schedule': schedule_date.strftime('%Y-%m-%d'),
-                'manpower_name': name,
-                'role': role,
-                'time_in': time_in_str,
-                'time_out': time_out_str
-            })
-
         result = {
             'missing_trips': missing_trips,
-            'missing_odo': missing_odo,
-            'time_log_status': time_log_status
+            'missing_odo': missing_odo
         }
 
         return jsonify(result)
@@ -5439,86 +5354,6 @@ def export_missing_data():
                     'No'
                 ])
 
-        # Add blank row and header for TimeLog section
-        writer.writerow([])
-        writer.writerow(['TIME LOG STATUS - DRIVERS/ASSISTANTS'])
-        writer.writerow([
-            'Date', 'Name', 'Role', 'Time In', 'Time Out'
-        ])
-
-        # Query manpower assigned to trips in date range
-        manpower_assignments = db.session.query(
-            Schedule.delivery_schedule,
-            Manpower.id,
-            Manpower.name,
-            Manpower.role,
-            Manpower.user_id
-        ).join(
-            Trip, Trip.schedule_id == Schedule.id
-        ).join(
-            trip_driver, Trip.id == trip_driver.c.trip_id
-        ).join(
-            Manpower, Manpower.id == trip_driver.c.manpower_id
-        ).filter(
-            Schedule.delivery_schedule >= start_date,
-            Schedule.delivery_schedule < end_date
-        ).union_all(
-            db.session.query(
-                Schedule.delivery_schedule,
-                Manpower.id,
-                Manpower.name,
-                Manpower.role,
-                Manpower.user_id
-            ).join(
-                Trip, Trip.schedule_id == Schedule.id
-            ).join(
-                trip_assistant, Trip.id == trip_assistant.c.trip_id
-            ).join(
-                Manpower, Manpower.id == trip_assistant.c.manpower_id
-            ).filter(
-                Schedule.delivery_schedule >= start_date,
-                Schedule.delivery_schedule < end_date
-            )
-        ).distinct().all()
-
-        # Get all TimeLog records in the date range
-        time_logs = db.session.query(
-            TimeLog
-        ).filter(
-            cast(TimeLog.time_in, Date) >= start_date,
-            cast(TimeLog.time_in, Date) < end_date
-        ).all()
-
-        # Create a dictionary of (date, user_id) -> TimeLog
-        time_log_coverage = {}
-        for tl in time_logs:
-            tl_date = tl.time_in.date()
-            key = (tl_date, tl.user_id)
-            time_log_coverage[key] = tl
-
-        # Write TimeLog status data
-        for schedule_date, manpower_id, name, role, user_id in manpower_assignments:
-            time_in_str = 'Missing'
-            time_out_str = 'Missing'
-
-            if user_id is not None:
-                key = (schedule_date, user_id)
-                if key in time_log_coverage:
-                    tl = time_log_coverage[key]
-                    # Format time_in and time_out as time strings (HH:MM AM/PM)
-                    if tl.time_in:
-                        time_in_str = tl.time_in.strftime('%I:%M %p')
-                    if tl.time_out:
-                        time_out_str = tl.time_out.strftime('%I:%M %p')
-
-            writer.writerow([
-                schedule_date.strftime('%Y-%m-%d'),
-                name,
-                role,
-                time_in_str,
-                time_out_str
-            ])
-
         output.seek(0)
 
         # Return as downloadable CSV file
@@ -5601,11 +5436,14 @@ def get_time_log_matrix_data(start_date, end_date):
             'time_out': tl.time_out.strftime('%I:%M %p') if tl.time_out else None
         }
 
-    # Generate list of all dates in range
+    # Generate list of all dates in range (store both obj and str)
     date_list = []
     current_date = start_date
     while current_date < end_date:
-        date_list.append(current_date.strftime('%Y-%m-%d'))
+        date_list.append({
+            'obj': current_date,
+            'str': current_date.strftime('%Y-%m-%d')
+        })
         current_date += timedelta(days=1)
 
     # Build unique personnel set
@@ -5621,8 +5459,9 @@ def get_time_log_matrix_data(start_date, end_date):
     personnel_list = []
     for person in unique_personnel.values():
         dates_dict = {}
-        for date_str in date_list:
-            date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+        for date_info in date_list:
+            date_obj = date_info['obj']
+            date_str = date_info['str']
 
             if person.user_id is None:
                 # No user account linked
@@ -5651,7 +5490,7 @@ def get_time_log_matrix_data(start_date, end_date):
             'dates': dates_dict
         })
 
-    return personnel_list, date_list
+    return personnel_list, [d['str'] for d in date_list]
 
 
 # Backload Routes
