@@ -6641,7 +6641,7 @@ def get_time_log_matrix_data(start_date, end_date):
     # Import Date casting function locally (following existing codebase pattern)
     from collections import namedtuple
 
-    from sqlalchemy import Date, cast
+    from sqlalchemy import func
 
     # Get all unique drivers and assistants assigned to trips in date range
     # Note: Models are already imported at module level
@@ -6681,11 +6681,12 @@ def get_time_log_matrix_data(start_date, end_date):
     )
 
     # Get all TimeLog records in the date range
+    # Use func.date() for SQLite compatibility instead of cast(Date)
     time_logs = (
         db.session.query(TimeLog)
         .filter(
-            cast(TimeLog.time_in, Date) >= start_date,
-            cast(TimeLog.time_in, Date) < end_date,
+            func.date(TimeLog.time_in) >= start_date,
+            func.date(TimeLog.time_in) < end_date,
         )
         .all()
     )

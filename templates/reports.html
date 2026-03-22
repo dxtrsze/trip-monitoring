@@ -1549,40 +1549,59 @@ document.addEventListener('DOMContentLoaded', function() {
       thead.appendChild(th);
     });
 
-    // Build personnel rows
+    // Build personnel rows - 2 rows per person (Time In and Time Out)
     data.personnel.forEach(person => {
-      const tr = document.createElement('tr');
+      // Row 1: Time In
+      const trTimeIn = document.createElement('tr');
 
-      // Name column
+      // Name column (only in first row)
       const nameTd = document.createElement('td');
       nameTd.innerHTML = `<strong>${person.name}</strong>`;
-      tr.appendChild(nameTd);
+      nameTd.rowSpan = 2; // Span across both rows
+      trTimeIn.appendChild(nameTd);
 
-      // Role column
-      const roleTd = document.createElement('td');
-      const roleColor = person.role === 'Driver' ? 'primary' : 'info';
-      roleTd.innerHTML = `<span class="badge bg-${roleColor}">${person.role}</span>`;
-      tr.appendChild(roleTd);
+      // Label column
+      const labelInTd = document.createElement('td');
+      labelInTd.innerHTML = '<span class="badge bg-primary">Time In</span>';
+      trTimeIn.appendChild(labelInTd);
 
-      // Date columns
+      // Date columns for Time In
       data.date_range.dates.forEach(date => {
         const td = document.createElement('td');
         const timeData = person.dates[date];
 
-        if (timeData.time_in === 'Missing' && timeData.time_out === 'Missing') {
+        if (timeData.time_in === 'Missing') {
           td.innerHTML = '<span class="badge bg-warning text-dark">Missing</span>';
         } else {
-          const timeInClass = timeData.time_in !== 'Missing' ? 'success' : 'warning';
-          const timeOutClass = timeData.time_out !== 'Missing' ? 'success' : 'warning';
-          td.innerHTML = `
-            <small><span class="badge bg-${timeInClass}">${timeData.time_in}</span></small><br>
-            <small><span class="badge bg-${timeOutClass}">${timeData.time_out}</span></small>
-          `;
+          td.innerHTML = `<span class="badge bg-success">${timeData.time_in}</span>`;
         }
-        tr.appendChild(td);
+        trTimeIn.appendChild(td);
       });
 
-      tbody.appendChild(tr);
+      tbody.appendChild(trTimeIn);
+
+      // Row 2: Time Out
+      const trTimeOut = document.createElement('tr');
+
+      // Label column
+      const labelOutTd = document.createElement('td');
+      labelOutTd.innerHTML = '<span class="badge bg-info">Time Out</span>';
+      trTimeOut.appendChild(labelOutTd);
+
+      // Date columns for Time Out
+      data.date_range.dates.forEach(date => {
+        const td = document.createElement('td');
+        const timeData = person.dates[date];
+
+        if (timeData.time_out === 'Missing') {
+          td.innerHTML = '<span class="badge bg-warning text-dark">Missing</span>';
+        } else {
+          td.innerHTML = `<span class="badge bg-success">${timeData.time_out}</span>`;
+        }
+        trTimeOut.appendChild(td);
+      });
+
+      tbody.appendChild(trTimeOut);
     });
 
     timeLogMatrixResults.style.display = 'block';
