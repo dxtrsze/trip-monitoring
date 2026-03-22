@@ -10,14 +10,33 @@
     try {
       showLoading();
 
+      // Get today's date in Manila timezone
+      const manilaNow = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' });
+      const today = new Date(manilaNow).toISOString().split('T')[0];
+
       // Fetch all data in parallel
       const data = await DashboardAPI.fetchAll();
+
+      // Fetch today's KPIs (KPI Daily section)
+      const todayKPIs = await DashboardAPI.fetchKPIs(today, today);
 
       // Fetch today's vehicle utilization separately (backend uses Manila time)
       const todayComparisons = await DashboardAPI.fetchComparisons(null, null, true);
 
+      // Set default date range to last 7 days
+      const end_date = new Date(manilaNow);
+      const start_date = new Date(end_date);
+      start_date.setDate(start_date.getDate() - 6);
+      const startDateStr = start_date.toISOString().split('T')[0];
+      const endDateStr = end_date.toISOString().split('T')[0];
+
+      // Fetch KPI Range with default 7-day range
+      const rangeKPIs = await DashboardAPI.fetchKPIs(startDateStr, endDateStr);
+
       // Render all components
-      DashboardCharts.renderKPIs(data.kpis);
+      DashboardCharts.renderKPIs(data.kpis, 'kpiCards');
+      DashboardCharts.renderKPIs(todayKPIs, 'kpiDailyCards');
+      DashboardCharts.renderKPIs(rangeKPIs, 'kpiRangeCards');
       DashboardCharts.initDeliveryCountsChart(data.trends.daily_deliveries);
       DashboardCharts.initFuelEfficiencyChart(data.trends.fuel_efficiency);
       DashboardCharts.initTruckUtilizationChart(data.trends.truck_utilization);
@@ -25,6 +44,10 @@
       DashboardCharts.initBranchFrequencyChart(data.comparisons.branch_frequency);
       DashboardCharts.initDriverPerformanceChart(data.comparisons.driver_performance);
       DashboardCharts.initGauges(data.gauges);
+
+      // Set date range inputs
+      document.getElementById('rangeStartDate').value = startDateStr;
+      document.getElementById('rangeEndDate').value = endDateStr;
 
       // Update timestamp
       lastUpdateTime = new Date();
@@ -51,14 +74,30 @@
       // Destroy existing charts
       DashboardCharts.destroyCharts();
 
-      // Re-fetch and render with today's vehicle utilization
-      const data = await DashboardAPI.fetchAll();
+      // Get today's date in Manila timezone
+      const manilaNow = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' });
+      const today = new Date(manilaNow).toISOString().split('T')[0];
+
+      // Re-fetch and render with bypass cache
+      const data = await DashboardAPI.fetchAll(null, null, true);
+
+      // Fetch today's KPIs (KPI Daily section)
+      const todayKPIs = await DashboardAPI.fetchKPIs(today, today, true);
 
       // Fetch today's vehicle utilization separately (backend uses Manila time)
       const todayComparisons = await DashboardAPI.fetchComparisons(null, null, true);
 
+      // Get current date range from inputs
+      const startDateStr = document.getElementById('rangeStartDate').value;
+      const endDateStr = document.getElementById('rangeEndDate').value;
+
+      // Fetch KPI Range with current date range
+      const rangeKPIs = await DashboardAPI.fetchKPIs(startDateStr, endDateStr, true);
+
       // Render all components
-      DashboardCharts.renderKPIs(data.kpis);
+      DashboardCharts.renderKPIs(data.kpis, 'kpiCards');
+      DashboardCharts.renderKPIs(todayKPIs, 'kpiDailyCards');
+      DashboardCharts.renderKPIs(rangeKPIs, 'kpiRangeCards');
       DashboardCharts.initDeliveryCountsChart(data.trends.daily_deliveries);
       DashboardCharts.initFuelEfficiencyChart(data.trends.fuel_efficiency);
       DashboardCharts.initTruckUtilizationChart(data.trends.truck_utilization);
@@ -96,6 +135,12 @@
     chartContainers.forEach(container => {
       container.innerHTML = '<div class="d-flex justify-content-center align-items-center h-100"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
     });
+
+    // Add loading overlay to KPI card containers
+    const kpiContainers = document.querySelectorAll('#kpiCards, #kpiDailyCards, #kpiRangeCards');
+    kpiContainers.forEach(container => {
+      container.innerHTML = '<div class="col-12"><div class="d-flex justify-content-center align-items-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading KPIs...</span></div></div></div>';
+    });
   }
 
   // Hide loading state
@@ -127,6 +172,52 @@
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) {
       refreshBtn.addEventListener('click', refreshDashboard);
+    }
+
+    // KPI Range Apply button handler
+    const rangeRefreshBtn = document.getElementById('rangeRefreshBtn');
+    if (rangeRefreshBtn) {
+      rangeRefreshBtn.addEventListener('click', async function() {
+        const startDate = document.getElementById('rangeStartDate').value;
+        const endDate = document.getElementById('rangeEndDate').value;
+
+        if (!startDate || !endDate) {
+          showError('Please select both start and end dates');
+          return;
+        }
+
+        // Validate date range
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffTime = Math.abs(end - start);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+        if (diffDays > 90) {
+          showError('Date range cannot exceed 90 days');
+          return;
+        }
+
+        if (start > end) {
+          showError('Start date must be before or equal to end date');
+          return;
+        }
+
+        // Disable button and show loading
+        rangeRefreshBtn.disabled = true;
+        rangeRefreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Loading...';
+
+        try {
+          // Fetch KPI data for selected range
+          const rangeKPIs = await DashboardAPI.fetchKPIs(startDate, endDate, true);
+          DashboardCharts.renderKPIs(rangeKPIs, 'kpiRangeCards');
+        } catch (error) {
+          console.error('Failed to load KPI range:', error);
+          showError(error.message);
+        } finally {
+          rangeRefreshBtn.disabled = false;
+          rangeRefreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Apply Range';
+        }
+      });
     }
 
     // Handle window resize

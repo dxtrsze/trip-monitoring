@@ -4,8 +4,9 @@ const DashboardCharts = (function() {
   let charts = {}; // Store chart instances
 
   // Initialize KPI cards rendering
-  function renderKPIs(kpiData) {
-    const container = document.getElementById('kpiCards');
+  function renderKPIs(kpiData, containerId = 'kpiCards') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
     container.innerHTML = '';
 
     const kpiConfig = [
@@ -14,7 +15,6 @@ const DashboardCharts = (function() {
       { key: 'difot_score', label: 'DIFOT Score', type: 'on_time' },
       { key: 'truck_utilization', label: 'Truck Utilization', type: 'utilization' },
       { key: 'fuel_efficiency', label: 'Fuel Efficiency (KM/L)', type: 'efficiency' },
-      { key: 'fuel_cost_per_km', label: 'Cost per KM (₱)', type: 'cost' },
       { key: 'data_completeness', label: 'Data Completeness', type: 'completeness' }
     ];
 
@@ -40,8 +40,6 @@ const DashboardCharts = (function() {
       if (config.key.includes('rate') || config.key.includes('score') ||
           config.key.includes('utilization') || config.key.includes('completeness')) {
         formattedValue = kpi.value.toFixed(1) + '%';
-      } else if (config.key.includes('cost_per_km')) {
-        formattedValue = '₱' + kpi.value.toFixed(2);
       } else {
         formattedValue = kpi.value.toFixed(1);
       }
@@ -128,42 +126,26 @@ const DashboardCharts = (function() {
 
     const dates = data.map(d => formatDate(d.date));
     const kmPerLiter = data.map(d => d.km_per_liter);
-    const costPerKm = data.map(d => d.cost_per_km);
 
     const option = {
       title: { text: '' },
       tooltip: {
         trigger: 'axis',
         formatter: function(params) {
-          let result = params[0].axisValue + '<br/>';
-          params.forEach(p => {
-            if (p.seriesName === 'KM/Liter') {
-              result += `${p.marker}${p.seriesName}: <strong>${p.value.toFixed(2)}</strong><br/>`;
-            } else {
-              result += `${p.marker}${p.seriesName}: <strong>₱${p.value.toFixed(2)}</strong><br/>`;
-            }
-          });
-          return result;
+          const p = params[0];
+          return `${p.axisValue}<br/>${p.marker}${p.seriesName}: <strong>${p.value.toFixed(2)}</strong>`;
         }
       },
-      legend: { data: ['KM/Liter', 'Cost/KM'] },
+      legend: { data: ['KM/Liter'] },
       xAxis: {
         type: 'category',
         data: dates,
         axisLabel: { rotate: 30 }
       },
-      yAxis: [
-        {
-          type: 'value',
-          name: 'KM/Liter',
-          position: 'left'
-        },
-        {
-          type: 'value',
-          name: 'Cost/KM (₱)',
-          position: 'right'
-        }
-      ],
+      yAxis: {
+        type: 'value',
+        name: 'KM/Liter'
+      },
       series: [
         {
           name: 'KM/Liter',
@@ -172,18 +154,9 @@ const DashboardCharts = (function() {
           data: kmPerLiter,
           itemStyle: { color: '#3b82f6' },
           lineStyle: { width: 2 }
-        },
-        {
-          name: 'Cost/KM',
-          type: 'line',
-          smooth: true,
-          yAxisIndex: 1,
-          data: costPerKm,
-          itemStyle: { color: '#f97316' },
-          lineStyle: { width: 2 }
         }
       ],
-      grid: { left: 60, right: 60, top: 40, bottom: 60 }
+      grid: { left: 60, right: 40, top: 40, bottom: 60 }
     };
 
     charts.fuelEfficiency.setOption(option);
@@ -259,7 +232,6 @@ const DashboardCharts = (function() {
       },
       xAxis: {
         type: 'value',
-        name: 'Utilization %',
         max: 100,
         axisLabel: { formatter: '{value}%' }
       },

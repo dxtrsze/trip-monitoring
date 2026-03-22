@@ -533,6 +533,8 @@
               <tr>
                 <th>Date</th>
                 <th>Plate Number</th>
+                <th>Driver(s)</th>
+                <th>Assistant(s)</th>
                 <th>Department</th>
                 <th>Has Start ODO</th>
                 <th>Has Refill ODO</th>
@@ -541,30 +543,6 @@
             </thead>
             <tbody id="missingOdoBody">
               <!-- Missing ODO data will be dynamically inserted here -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-    <!-- TimeLog Records Section -->
-    <div class="card border-info mt-3">
-      <div class="card-header py-2 bg-info text-white">
-        <h6 class="mb-0"><i class="bi bi-clock"></i> Driver/Assistant Time Log Status</h6>
-      </div>
-      <div class="card-body">
-        <div class="table-responsive">
-          <table class="table table-sm table-striped table-hover">
-            <thead class="table-light">
-              <tr>
-                <th>Date</th>
-                <th>Name</th>
-                <th>Role</th>
-                <th>Time In</th>
-                <th>Time Out</th>
-              </tr>
-            </thead>
-            <tbody id="missingTimeLogBody">
-              <!-- Missing TimeLog data will be dynamically inserted here -->
             </tbody>
           </table>
         </div>
@@ -655,7 +633,6 @@ document.addEventListener('DOMContentLoaded', function() {
   const missingResults = document.getElementById('missingResults');
   const missingTripsBody = document.getElementById('missingTripsBody');
   const missingOdoBody = document.getElementById('missingOdoBody');
-  const missingTimeLogBody = document.getElementById('missingTimeLogBody');
   const exportMissingBtn = document.getElementById('exportMissingBtn');
   const missingDateRange = document.getElementById('missingDateRange');
 
@@ -766,6 +743,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fuelResults.style.display = 'none';
         frequencyResults.style.display = 'none';
         difotResults.style.display = 'none';
+        missingResults.style.display = 'none';
+        timeLogMatrixResults.style.display = 'none';
       })
       .catch(error => {
         console.error('Error:', error);
@@ -805,6 +784,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fuelResults.style.display = 'none';
         frequencyResults.style.display = 'none';
         difotResults.style.display = 'none';
+        missingResults.style.display = 'none';
+        timeLogMatrixResults.style.display = 'none';
       })
       .catch(error => {
         console.error('Error:', error);
@@ -844,6 +825,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fuelResults.style.display = 'none';
         frequencyResults.style.display = 'none';
         difotResults.style.display = 'none';
+        missingResults.style.display = 'none';
+        timeLogMatrixResults.style.display = 'none';
       })
       .catch(error => {
         console.error('Error:', error);
@@ -890,6 +873,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fleetResults.style.display = 'none';
         frequencyResults.style.display = 'none';
         difotResults.style.display = 'none';
+        missingResults.style.display = 'none';
+        timeLogMatrixResults.style.display = 'none';
       })
       .catch(error => {
         console.error('Error:', error);
@@ -928,6 +913,9 @@ document.addEventListener('DOMContentLoaded', function() {
         truckResults.style.display = 'none';
         fleetResults.style.display = 'none';
         fuelResults.style.display = 'none';
+        difotResults.style.display = 'none';
+        missingResults.style.display = 'none';
+        timeLogMatrixResults.style.display = 'none';
       })
       .catch(error => {
         console.error('Error:', error);
@@ -968,6 +956,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fuelResults.style.display = 'none';
         frequencyResults.style.display = 'none';
         missingResults.style.display = 'none';
+        timeLogMatrixResults.style.display = 'none';
       })
       .catch(error => {
         console.error('Error:', error);
@@ -1008,6 +997,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fuelResults.style.display = 'none';
         frequencyResults.style.display = 'none';
         difotResults.style.display = 'none';
+        timeLogMatrixResults.style.display = 'none';
       })
       .catch(error => {
         console.error('Error:', error);
@@ -1459,7 +1449,6 @@ document.addEventListener('DOMContentLoaded', function() {
   function displayMissingData(data) {
     missingTripsBody.innerHTML = '';
     missingOdoBody.innerHTML = '';
-    missingTimeLogBody.innerHTML = '';
 
     // Display missing trips data
     if (!data.missing_trips || data.missing_trips.length === 0) {
@@ -1492,7 +1481,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Display missing ODO data
     if (!data.missing_odo || data.missing_odo.length === 0) {
-      missingOdoBody.innerHTML = '<tr><td colspan="6" class="text-center text-success"><i class="bi bi-check-circle"></i> All vehicles have ODO records</td></tr>';
+      missingOdoBody.innerHTML = '<tr><td colspan="8" class="text-center text-success"><i class="bi bi-check-circle"></i> All vehicles have ODO records</td></tr>';
     } else {
       data.missing_odo.forEach(row => {
         const tr = document.createElement('tr');
@@ -1510,47 +1499,14 @@ document.addEventListener('DOMContentLoaded', function() {
         tr.innerHTML = `
           <td>${row.delivery_schedule}</td>
           <td><strong>${row.plate_number}</strong></td>
+          <td>${row.drivers || 'N/A'}</td>
+          <td>${row.assistants || 'N/A'}</td>
           <td>${row.department || 'N/A'}</td>
           <td>${hasStartOdo}</td>
           <td>${hasRefillOdo}</td>
           <td>${hasEndOdo}</td>
         `;
         missingOdoBody.appendChild(tr);
-      });
-    }
-
-    // Display TimeLog status data
-    if (!data.time_log_status || data.time_log_status.length === 0) {
-      missingTimeLogBody.innerHTML = '<tr><td colspan="5" class="text-center text-success"><i class="bi bi-check-circle"></i> No drivers/assistants assigned in this date range</td></tr>';
-    } else {
-      data.time_log_status.forEach(row => {
-        const tr = document.createElement('tr');
-
-        // Time In: show actual time if exists, otherwise show "Missing"
-        const timeInBadge = row.time_in
-          ? `<span class="badge bg-success">${row.time_in}</span>`
-          : '<span class="badge bg-warning text-dark">Missing</span>';
-
-        // Time Out: show actual time if exists, otherwise show "Missing"
-        const timeOutBadge = row.time_out
-          ? `<span class="badge bg-success">${row.time_out}</span>`
-          : '<span class="badge bg-warning text-dark">Missing</span>';
-
-        // Role badge color
-        const roleColors = {
-          'Driver': 'primary',
-          'Assistant': 'info'
-        };
-        const roleColor = roleColors[row.role] || 'secondary';
-
-        tr.innerHTML = `
-          <td>${row.delivery_schedule}</td>
-          <td><strong>${row.manpower_name}</strong></td>
-          <td><span class="badge bg-${roleColor}">${row.role}</span></td>
-          <td>${timeInBadge}</td>
-          <td>${timeOutBadge}</td>
-        `;
-        missingTimeLogBody.appendChild(tr);
       });
     }
 

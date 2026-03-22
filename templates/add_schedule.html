@@ -261,9 +261,10 @@ function addTrip() {
             <select name="vehicle_${tripId}" class="form-select vehicle-select" onchange="handleVehicleChange(${tripId})" required>
               <option value="">Select</option>
               {% for v in vehicles %}
-              <option value="{{ v.id }}" data-capacity="{{ v.capacity or 0 }}">{{ v.plate_number }}{% if v.capacity %} ({{ v.capacity }} CBM){% endif %}</option>
+              <option value="{{ v.id }}" data-capacity="{{ v.capacity or 0 }}" data-type="{{ v.type or '' }}">{{ v.plate_number }}{% if v.type %} ({{ v.type }}){% endif %}{% if v.capacity %} ({{ v.capacity }} CBM){% endif %}</option>
               {% endfor %}
             </select>
+            <input type="hidden" name="vehicle_type_${tripId}" id="vehicle-type-${tripId}">
             <div class="form-text text-danger" id="vehicle-error-${tripId}" style="display:none;">This vehicle is already selected in another trip</div>
           </div>
           <div class="col-md-4 mb-3">
@@ -315,6 +316,14 @@ function addTrip() {
 
   document.getElementById('tripsContainer').insertAdjacentHTML('beforeend', tripHtml);
   document.getElementById('tripCount').value = tripCounter;
+
+  // Add event listeners to driver checkboxes for in-house vehicle warning
+  const newTripCard = document.querySelector(`.trip-card[data-trip="${tripId}"]`);
+  newTripCard.querySelectorAll(`input[name="driver_${tripId}"]`).forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+      checkInHouseVehicleDriverWarning(tripId);
+    });
+  });
 }
 
 function assignToTrip(tripId) {
@@ -473,16 +482,34 @@ function removeTrip(tripId) {
   if (selectedVehicle) {
     updateVehicleDropdowns();
   }
+
+  // Clean up in-house warning if it exists
+  const warningDiv = document.getElementById(`inhouse-warning-${tripId}`);
+  if (warningDiv) {
+    warningDiv.remove();
+  }
 }
 
 // Handle vehicle selection change
 function handleVehicleChange(changedTripId) {
+  const vehicleSelect = document.querySelector(`.trip-card[data-trip="${changedTripId}"] .vehicle-select`);
+  const vehicleTypeInput = document.getElementById(`vehicle-type-${changedTripId}`);
+
+  // Update vehicle type hidden field
+  if (vehicleSelect.value) {
+    const selectedOption = vehicleSelect.options[vehicleSelect.selectedIndex];
+    const vehicleType = selectedOption.getAttribute('data-type') || '';
+    vehicleTypeInput.value = vehicleType;
+  } else {
+    vehicleTypeInput.value = '';
+  }
+
   updateVehicleDropdowns();
   updateTripUtilization(changedTripId);
+  checkInHouseVehicleDriverWarning(changedTripId);
 
   // Check if the newly selected vehicle is a duplicate
-  const changedSelect = document.querySelector(`.trip-card[data-trip="${changedTripId}"] .vehicle-select`);
-  const selectedValue = changedSelect.value;
+  const selectedValue = vehicleSelect.value;
   const errorDiv = document.getElementById(`vehicle-error-${changedTripId}`);
 
   if (!selectedValue) {
@@ -507,12 +534,56 @@ function handleVehicleChange(changedTripId) {
   if (isDuplicate) {
     errorDiv.style.display = 'block';
     errorDiv.textContent = 'This vehicle is already selected in another trip';
-    changedSelect.classList.add('is-invalid');
+    vehicleSelect.classList.add('is-invalid');
   } else {
     errorDiv.style.display = 'none';
-    changedSelect.classList.remove('is-invalid');
+    vehicleSelect.classList.remove('is-invalid');
     // Check if vehicle is already scheduled for this date
     checkVehicleSchedule(changedTripId, selectedValue);
+  }
+}
+
+// Check if in-house vehicle has no driver selected
+function checkInHouseVehicleDriverWarning(tripId) {
+  const vehicleSelect = document.querySelector(`.trip-card[data-trip="${tripId}"] .vehicle-select`);
+  const errorDiv = document.getElementById(`vehicle-error-${tripId}`);
+
+  if (!vehicleSelect.value) {
+    return;
+  }
+
+  const selectedOption = vehicleSelect.options[vehicleSelect.selectedIndex];
+  const vehicleType = selectedOption.getAttribute('data-type');
+
+  // Check if vehicle is in-house
+  if (vehicleType && vehicleType.toLowerCase() === 'in-house') {
+    // Check if any driver is selected
+    const driverCheckboxes = document.querySelectorAll(`.trip-card[data-trip="${tripId}"] input[name="driver_${tripId}"]:checked`);
+    const hasDriver = driverCheckboxes.length > 0;
+
+    if (!hasDriver) {
+      // Show warning (use info class, not blocking)
+      const existingWarning = document.getElementById(`inhouse-warning-${tripId}`);
+      if (!existingWarning) {
+        const warningDiv = document.createElement('div');
+        warningDiv.id = `inhouse-warning-${tripId}`;
+        warningDiv.className = 'form-text text-info';
+        warningDiv.textContent = '⚠️ In-house vehicle typically requires a driver assigned';
+        vehicleSelect.parentNode.appendChild(warningDiv);
+      }
+    } else {
+      // Remove warning if driver is selected
+      const existingWarning = document.getElementById(`inhouse-warning-${tripId}`);
+      if (existingWarning) {
+        existingWarning.remove();
+      }
+    }
+  } else {
+    // Remove warning if vehicle is not in-house
+    const existingWarning = document.getElementById(`inhouse-warning-${tripId}`);
+    if (existingWarning) {
+      existingWarning.remove();
+    }
   }
 }
 
@@ -729,6 +800,28 @@ document.getElementById('scheduleForm').addEventListener('submit', function(e) {
   if (duplicateFound) {
     e.preventDefault();
     alert('Cannot save schedule: The same vehicle is assigned to multiple trips. Please select a different vehicle for each trip.');
+    return false;
+  }
+
+  // Check for trips with vehicles but no assigned shipments
+  const tripCards = document.querySelectorAll('.trip-card');
+  let tripsWithoutShipments = [];
+
+  tripCards.forEach(tripCard => {
+    const tripId = tripCard.getAttribute('data-trip');
+    const vehicleSelect = tripCard.querySelector('.vehicle-select');
+    const idsInput = document.getElementById(`trip-${tripId}-ids`);
+
+    // Check if trip has a vehicle selected but no shipments assigned
+    if (vehicleSelect.value && (!idsInput.value || idsInput.value.trim() === '')) {
+      tripsWithoutShipments.push(tripId);
+    }
+  });
+
+  if (tripsWithoutShipments.length > 0) {
+    e.preventDefault();
+    const tripNumbers = tripsWithoutShipments.map(id => `#${id}`).join(', ');
+    alert(`Cannot save schedule: Trip(s) ${tripNumbers} have vehicles selected but no shipments assigned. Please assign shipments to each trip or remove empty trips.`);
     return false;
   }
 

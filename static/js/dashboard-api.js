@@ -2,11 +2,12 @@
 
 const DashboardAPI = {
   // Fetch all KPI data
-  async fetchKPIs(startDate = null, endDate = null) {
+  async fetchKPIs(startDate = null, endDate = null, refresh = false) {
     let url = '/api/dashboard/kpis';
     const params = new URLSearchParams();
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
+    if (refresh) params.append('refresh', 'true');
     if (params.toString()) url += '?' + params.toString();
 
     const response = await fetch(url);
@@ -64,9 +65,9 @@ const DashboardAPI = {
   },
 
   // Fetch all dashboard data in parallel
-  async fetchAll(startDate = null, endDate = null) {
+  async fetchAll(startDate = null, endDate = null, refresh = false) {
     const [kpis, trends, comparisons, gauges] = await Promise.all([
-      this.fetchKPIs(startDate, endDate),
+      this.fetchKPIs(startDate, endDate, refresh),
       this.fetchTrends(startDate, endDate),
       this.fetchComparisons(startDate, endDate),
       this.fetchGauges(startDate, endDate)

@@ -1458,10 +1458,10 @@ function renderCurrentTripShipments(shipments) {
       <div class="list-group-item d-flex justify-content-between align-items-center">
         <div>
           <strong>${shipment.document_number}</strong> - ${shipment.branch_name_v2}
-          <br><small class="text-muted">CBM: ${shipment.total_cbm ? shipment.total_cbm.toFixed(2) : 'N/A'} | Due: ${shipment.due_date || 'N/A'}</small>
+          <br><small class="text-muted">CBM: ${shipment.total_cbm ? shipment.total_cbm.toFixed(2) : 'N/A'} | Qty: ${shipment.total_ordered_qty || 'N/A'} | Items: ${shipment.line_item_count || 0} | Due: ${shipment.due_date || 'N/A'}</small>
         </div>
         <button type="button" class="btn btn-sm btn-outline-danger"
-                onclick="removeShipmentFromTrip('${shipment.data_id}', '${shipment.document_number}', '${shipment.branch_name_v2}')">
+                onclick="removeShipmentFromTrip('${shipment.trip_detail_id}', '${shipment.document_number}', '${shipment.branch_name_v2}')">
           <i class="bi bi-trash"></i> Remove
         </button>
       </div>`;
@@ -1470,7 +1470,7 @@ function renderCurrentTripShipments(shipments) {
   container.innerHTML = html;
 }
 
-function removeShipmentFromTrip(dataId, docNumber, branchName) {
+function removeShipmentFromTrip(tripDetailId, docNumber, branchName) {
   if (!confirm(`Are you sure you want to remove ${docNumber} - ${branchName} from this trip?`)) {
     return;
   }
@@ -1482,7 +1482,7 @@ function removeShipmentFromTrip(dataId, docNumber, branchName) {
     },
     body: JSON.stringify({
       trip_id: editTripId,
-      data_id: dataId
+      trip_detail_id: tripDetailId
     })
   })
   .then(response => response.json())

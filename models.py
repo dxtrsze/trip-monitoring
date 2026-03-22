@@ -65,6 +65,7 @@ class Schedule(db.Model):
     plate_number = db.Column(db.String(50), nullable=True)
     capacity = db.Column(db.Float, nullable=True)
     actual = db.Column(db.Float, nullable=True)
+    type = db.Column(db.String(50), nullable=True)  # 'in-house' or '3pl'
 
     def __repr__(self):
         return f'<Schedule {self.id} - {self.delivery_schedule}>'

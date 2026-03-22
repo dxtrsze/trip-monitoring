@@ -40,7 +40,6 @@ function getKPIIcon(kpiName) {
     difot_score: 'bi-graph-up-arrow',
     truck_utilization: 'bi-truck',
     fuel_efficiency: 'bi-fuel-pump',
-    fuel_cost_per_km: 'bi-currency-dollar',
     data_completeness: 'bi-file-check'
   };
   return icons[kpiName] || 'bi-bar-chart';

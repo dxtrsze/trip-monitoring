@@ -94,34 +94,6 @@ styles %}
                 </div>
             </div>
 
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5>
-                        <i class="bi bi-geo-alt"></i> Branch Delivery Frequency
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div id="branchFrequencyChart" style="height: 350px"></div>
-                </div>
-            </div>
-
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5>
-                        <i class="bi bi-people"></i> Driver/Assistant
-                        Performance
-                    </h5>
-                    <small class="text-muted">
-                        Sorted by trip count. Hover bars to see drop completion & ODO compliance rates.
-                    </small>
-                </div>
-                <div class="card-body">
-                    <div
-                        id="driverPerformanceChart"
-                        style="height: 350px"
-                    ></div>
-                </div>
-            </div>
         </div>
     </div>
 </div>
@@ -153,13 +125,55 @@ styles %}
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
-                    <h5>Data Completeness</h5>
+                    <h5>Delivery Data Completeness</h5>
                 </div>
                 <div class="card-body">
                     <div id="completenessGauge" style="height: 250px"></div>
                 </div>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- KPI Daily (Today's Metrics) -->
+<div class="container-fluid mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">KPI Daily</h2>
+        <small class="text-muted"
+            >Today's performance metrics (Manila time)</small
+        >
+    </div>
+    <div class="row" id="kpiDailyCards">
+        <!-- KPI cards will be dynamically inserted here -->
+    </div>
+</div>
+
+<!-- KPI Range (Custom Date Range) -->
+<div class="container-fluid mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">KPI Range</h2>
+        <div class="d-flex align-items-center gap-2">
+            <input
+                type="date"
+                id="rangeStartDate"
+                class="form-control form-control-sm"
+                style="width: 150px"
+            />
+            <span class="text-muted">to</span>
+            <input
+                type="date"
+                id="rangeEndDate"
+                class="form-control form-control-sm"
+                style="width: 150px"
+            />
+            <button id="rangeRefreshBtn" class="btn btn-primary btn-sm ms-2">
+                <i class="bi bi-arrow-clockwise"></i> Apply Range
+            </button>
+            <small class="text-muted ms-2">Max 90 days</small>
+        </div>
+    </div>
+    <div class="row" id="kpiRangeCards">
+        <!-- KPI cards will be dynamically inserted here -->
     </div>
 </div>
 
