@@ -3914,6 +3914,7 @@ def dashboard_comparisons():
                 db.session.query(Trip.id)
                 .join(trip_driver, Trip.id == trip_driver.c.trip_id)
                 .join(Manpower, Manpower.id == trip_driver.c.manpower_id)
+                .join(Schedule, Trip.schedule_id == Schedule.id)
                 .filter(
                     Manpower.name == person_name,
                     Schedule.delivery_schedule.between(start_date, end_date),
@@ -3925,6 +3926,7 @@ def dashboard_comparisons():
                 db.session.query(Trip.id)
                 .join(trip_assistant, Trip.id == trip_assistant.c.trip_id)
                 .join(Manpower, Manpower.id == trip_assistant.c.manpower_id)
+                .join(Schedule, Trip.schedule_id == Schedule.id)
                 .filter(
                     Manpower.name == person_name,
                     Schedule.delivery_schedule.between(start_date, end_date),
